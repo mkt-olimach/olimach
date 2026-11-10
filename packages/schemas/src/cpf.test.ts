@@ -22,3 +22,12 @@ describe("cpf", () => {
     expect(onlyDigits("123.456.789-01")).toBe("12345678901");
   });
 });
+
+describe("formatCpf", () => {
+  it("formata parcial e completo", async () => {
+    const { formatCpf } = await import("./cpf");
+    expect(formatCpf("5299")).toBe("529.9");
+    expect(formatCpf("52998224725")).toBe("529.982.247-25");
+    expect(formatCpf("529.982.247-25999")).toBe("529.982.247-25");
+  });
+});
