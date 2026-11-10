@@ -68,7 +68,7 @@ export function Home() {
   return (
     <>
       {/* HERO */}
-      <section id="inicio" className="mx-auto grid max-w-[1240px] items-center gap-8 px-5 pb-6 pt-10 md:px-10 lg:grid-cols-[43.5%_1fr] lg:gap-5 lg:pt-8">
+      <section id="inicio" className="mx-auto grid max-w-[1400px] items-center gap-8 px-5 pb-6 pt-10 md:px-10 lg:grid-cols-[43.5%_1fr] lg:gap-5 lg:pt-8">
         <div className="lg:pr-6">
           <Eyebrow className="flex items-center gap-2">
             Formação para novas oportunidades <span className="inline-block h-px w-8 bg-[#9db7ce]" aria-hidden />
@@ -126,7 +126,7 @@ export function Home() {
 
       {/* DESTAQUES */}
       <section aria-label="Destaques" className="mt-8 border-y border-line bg-surface">
-        <ul className="mx-auto grid max-w-[1240px] grid-cols-2 px-5 py-4 md:px-10 lg:grid-cols-4">
+        <ul className="mx-auto grid max-w-[1400px] grid-cols-2 px-5 py-4 md:px-10 lg:grid-cols-4">
           {highlights.map(({ icon: Icon, value, label }) => (
             <li
               key={value}
@@ -143,7 +143,7 @@ export function Home() {
       </section>
 
       {/* SOBRE + DESTAQUE */}
-      <section id="sobre" className="mx-auto grid max-w-[1240px] gap-5 px-5 pb-5 pt-10 md:px-10 lg:grid-cols-[36%_28%_1fr]">
+      <section id="sobre" className="mx-auto grid max-w-[1400px] gap-5 px-5 pb-5 pt-10 md:px-10 lg:grid-cols-[36%_28%_1fr]">
         <div className="lg:pr-7">
           <Eyebrow>Sobre a Olimach</Eyebrow>
           <h2 className="mb-4 mt-4 text-2xl leading-snug text-navy-900 md:text-3xl">
@@ -214,7 +214,7 @@ export function Home() {
       </section>
 
       {/* FAIXA DE DIFERENCIAIS */}
-      <section id="diferenciais" className="mx-auto max-w-[1240px] px-5 pb-10 md:px-10">
+      <section id="diferenciais" className="mx-auto max-w-[1400px] px-5 pb-10 md:px-10">
         <ul className="grid rounded-2xl border border-line bg-surface px-3 py-5 shadow-sm lg:grid-cols-3">
           {[
             { icon: ScanQrCode, title: "Validação digital", text: "Consulta de certificados pelo código exato, em página pública.", to: "/validar" },
@@ -248,7 +248,7 @@ export function Home() {
       </section>
 
       {/* CURSOS */}
-      <section id="cursos" className="mx-auto max-w-[1240px] px-5 pb-14 md:px-10">
+      <section id="cursos" className="mx-auto max-w-[1400px] px-5 pb-14 md:px-10">
         <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div>
             <Eyebrow>Desenvolvimento profissional</Eyebrow>
@@ -334,7 +334,7 @@ export function Home() {
       </section>
 
       {/* CONTATO */}
-      <section id="contato" className="mx-auto max-w-[1240px] px-5 pb-14 md:px-10">
+      <section id="contato" className="mx-auto max-w-[1400px] px-5 pb-14 md:px-10">
         <div className="flex flex-col gap-6 rounded-[18px] bg-gradient-to-br from-[#0b2b50] to-[#1e4e7e] p-7 text-white shadow-xl md:flex-row md:items-center md:px-9">
           <span className="grid h-14 w-14 shrink-0 place-items-center rounded-[14px] border border-white/30 bg-white/10">
             <Headphones size={30} aria-hidden />
