@@ -3,11 +3,13 @@ import { AdminLayout } from "./components/AdminLayout";
 import { Dashboard } from "./pages/Dashboard";
 import { Login } from "./pages/Login";
 import { Placeholder } from "./pages/Placeholder";
+import { ResetPassword } from "./pages/ResetPassword";
 
 export function App() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      <Route path="/redefinir-senha" element={<ResetPassword />} />
       <Route element={<AdminLayout />}>
         <Route index element={<Dashboard />} />
         <Route path="/alunos" element={<Placeholder title="Alunos" />} />
