@@ -8,6 +8,7 @@
 
 @layer base {
   html {
+    scroll-behavior: smooth;
     font-family: var(--font-body);
     color: var(--text);
     background-color: var(--bg);
@@ -21,6 +22,17 @@
     font-family: var(--font-heading);
     font-weight: 800;
     color: var(--navy-900);
+  }
+
+  /* Compensa o cabecalho fixo ao rolar ate uma ancora. */
+  [id] {
+    scroll-margin-top: 7rem;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
   }
 
   :focus-visible {

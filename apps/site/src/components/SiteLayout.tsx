@@ -1,7 +1,7 @@
 import { BrandLogo, Pending, cn } from "@olimach/ui";
 import { ArrowUpRight, MapPin, Menu, MessageCircle, Search, UserRound, X } from "lucide-react";
 import { useEffect, useState } from "react";
-import type { FormEvent } from "react";
+import type { FormEvent, MouseEvent, ReactNode } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { whatsappLink } from "../lib/whatsapp";
 
@@ -44,15 +44,46 @@ function CourseSearch() {
   );
 }
 
+const reducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+function scrollToHash(hash: string) {
+  document.getElementById(hash.slice(1))?.scrollIntoView({ behavior: reducedMotion() ? "auto" : "smooth" });
+}
+
+/** Link para uma ancora da Home ("/#cursos"). Na Home rola suavemente sem recarregar; em outra rota navega e o efeito do layout rola. */
+function AnchorLink({ href, className, children, onNavigate }: { href: string; className?: string; children: ReactNode; onNavigate?: () => void }) {
+  const { pathname } = useLocation();
+  const navigate = useNavigate();
+  const hash = href.slice(href.indexOf("#"));
+
+  function onClick(event: MouseEvent<HTMLAnchorElement>) {
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return;
+    event.preventDefault();
+    onNavigate?.();
+    if (pathname === "/") {
+      scrollToHash(hash);
+      window.history.replaceState(null, "", `/${hash}`);
+    } else {
+      navigate({ pathname: "/", hash });
+    }
+  }
+
+  return (
+    <a href={href} onClick={onClick} className={className}>
+      {children}
+    </a>
+  );
+}
+
 export function SiteLayout() {
   const { pathname, search, hash } = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
 
-  // O React Router nao rola ate a ancora sozinho (links como /#cursos e a busca).
+  // O React Router nao rola ate a ancora sozinho (chegada vinda de outra rota, como /validar -> /#cursos).
   useEffect(() => {
     setMenuOpen(false);
     if (!hash) return;
-    document.getElementById(hash.slice(1))?.scrollIntoView();
+    scrollToHash(hash);
   }, [pathname, search, hash]);
 
   return (
@@ -73,9 +104,15 @@ export function SiteLayout() {
               )}
             >
               {nav.map((item) => (
-                <a key={item.href} href={item.href} className="px-2 py-3 hover:text-navy-900 lg:p-0">
-                  {item.label}
-                </a>
+                item.href.startsWith("/#") ? (
+                  <AnchorLink key={item.href} href={item.href} onNavigate={() => setMenuOpen(false)} className="px-2 py-3 hover:text-navy-900 lg:p-0">
+                    {item.label}
+                  </AnchorLink>
+                ) : (
+                  <Link key={item.href} to={item.href} className="px-2 py-3 hover:text-navy-900 lg:p-0">
+                    {item.label}
+                  </Link>
+                )
               ))}
             </nav>
 
@@ -114,14 +151,14 @@ export function SiteLayout() {
             </div>
             <div className="flex flex-col gap-3 text-[#b0c3d8]">
               <h3 className="mb-2 text-xs font-extrabold text-white">Explore</h3>
-              <a href="/#cursos" className="hover:text-white">Cursos e treinamentos</a>
-              <a href="/#sobre" className="hover:text-white">Sobre a Olimach</a>
+              <AnchorLink href="/#cursos" className="hover:text-white">Cursos e treinamentos</AnchorLink>
+              <AnchorLink href="/#sobre" className="hover:text-white">Sobre a Olimach</AnchorLink>
               <Link to="/validar" className="hover:text-white">Validar certificado</Link>
             </div>
             <div className="flex flex-col gap-3 text-[#b0c3d8]">
               <h3 className="mb-2 text-xs font-extrabold text-white">Informações</h3>
-              <a href="/#contato" className="hover:text-white">Entre em contato</a>
-              <a href="/#faq" className="hover:text-white">Dúvidas frequentes</a>
+              <AnchorLink href="/#contato" className="hover:text-white">Entre em contato</AnchorLink>
+              <AnchorLink href="/#faq" className="hover:text-white">Dúvidas frequentes</AnchorLink>
               <Link to="/privacidade" className="hover:text-white">Política de privacidade</Link>
             </div>
             <div className="flex flex-col gap-3 text-[#b0c3d8]">
