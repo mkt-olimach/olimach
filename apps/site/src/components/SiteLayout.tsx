@@ -87,11 +87,11 @@ export function SiteLayout() {
   }, [pathname, search, hash]);
 
   return (
-    <div className="bg-[#f0f3f7] md:p-4">
-      {/* overflow-clip (e nao hidden) para manter o cabecalho sticky */}
-      <div className="mx-auto max-w-[1540px] overflow-clip bg-surface md:rounded-2xl md:border md:border-line md:shadow-sm">
+    <div className="bg-surface">
+      {/* Largura total: fundos e faixas ocupam a tela inteira; so o conteudo tem largura maxima. */}
+      <div>
         <header className="sticky top-0 z-30 border-b border-line bg-surface/95 backdrop-blur">
-          <div className="mx-auto flex max-w-[1240px] items-center justify-between gap-6 px-5 py-1 md:px-10">
+          <div className="mx-auto flex max-w-[1400px] items-center justify-between gap-6 px-5 py-1 md:px-10">
             <Link to="/" aria-label="OLIMACH, página inicial" className="shrink-0">
               <BrandLogo className="h-20 w-auto md:h-24" />
             </Link>
@@ -142,7 +142,7 @@ export function SiteLayout() {
         </main>
 
         <footer className="bg-[#092744] text-white">
-          <div className="mx-auto grid max-w-[1240px] gap-10 px-5 pb-10 pt-12 text-xs md:px-10 lg:grid-cols-[1.5fr_0.75fr_0.75fr_1.2fr]">
+          <div className="mx-auto grid max-w-[1400px] gap-10 px-5 pb-10 pt-12 text-xs md:px-10 lg:grid-cols-[1.5fr_0.75fr_0.75fr_1.2fr]">
             <div>
               <BrandLogo className="h-24 w-auto rounded-lg bg-white p-2" />
               <p className="mt-5 max-w-[270px] text-[#a6bad0]">
@@ -176,7 +176,7 @@ export function SiteLayout() {
             </div>
           </div>
           <div className="border-t border-[#31506c]">
-            <div className="mx-auto flex max-w-[1240px] flex-col gap-2 px-5 py-5 text-[11px] text-[#92a9be] md:flex-row md:justify-between md:px-10">
+            <div className="mx-auto flex max-w-[1400px] flex-col gap-2 px-5 py-5 text-[11px] text-[#92a9be] md:flex-row md:justify-between md:px-10">
               <span>© {new Date().getFullYear()} Olimach. Todos os direitos reservados.</span>
               <span><Pending>razão social e CNPJ</Pending></span>
               <span>Desenvolvido por Agência 1925</span>
