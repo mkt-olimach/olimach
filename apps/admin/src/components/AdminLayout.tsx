@@ -64,7 +64,7 @@ function GlobalSearch() {
 
 /** Layout protegido: exige sessao e perfil ativo (a autorizacao real e a RLS no banco). */
 export function AdminLayout() {
-  const { loading, session, profile, signOut } = useAuth();
+  const { loading, session, profile, recovery, signOut } = useAuth();
   const { pathname } = useLocation();
   const [drawerOpen, setDrawerOpen] = useState(false);
 
@@ -72,6 +72,8 @@ export function AdminLayout() {
 
   if (loading) return <p className="p-8 text-muted">Carregando...</p>;
   if (!session) return <Navigate to="/login" replace />;
+  // Sessao vinda do link de recuperacao: so serve para definir a nova senha.
+  if (recovery) return <Navigate to="/redefinir-senha" replace />;
 
   const displayName = profile?.name ?? session.user.email ?? "Usuário";
 

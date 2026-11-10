@@ -16,6 +16,22 @@
   --warning: #e0a100;
   --danger: #d64545;
 
+  /* Mesmas cores em canais RGB: permitem modificadores de opacidade do Tailwind (bg-navy-900/40). */
+  --navy-900-rgb: 11 31 77;
+  --navy-700-rgb: 26 58 122;
+  --blue-500-rgb: 30 99 199;
+  --orange-500-rgb: 242 138 30;
+  --orange-600-rgb: 217 115 13;
+  --safety-yellow-rgb: 245 196 0;
+  --bg-rgb: 245 247 250;
+  --surface-rgb: 255 255 255;
+  --border-rgb: 227 232 239;
+  --text-rgb: 28 36 51;
+  --muted-rgb: 107 118 137;
+  --success-rgb: 31 157 85;
+  --warning-rgb: 224 161 0;
+  --danger-rgb: 214 69 69;
+
   --radius-card: 12px;
   --radius-btn-landing: 999px;
   --radius-btn-admin: 10px;

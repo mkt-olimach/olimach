@@ -118,3 +118,13 @@ export const publicValidationRowSchema = z.object({
   expires_at: z.string().nullable(),
 });
 export type PublicValidationRow = z.infer<typeof publicValidationRowSchema>;
+
+/* Senha do admin: minimo de 10 caracteres, com letra e numero. O limite de 72 e o do bcrypt usado pelo Supabase Auth. */
+export const newPasswordSchema = z
+  .string()
+  .min(10, "A senha deve ter pelo menos 10 caracteres.")
+  .max(72, "A senha deve ter no máximo 72 caracteres.")
+  .regex(/[A-Za-z]/, "A senha deve ter pelo menos uma letra.")
+  .regex(/[0-9]/, "A senha deve ter pelo menos um número.");
+
+export const emailSchema = z.string().trim().email("Informe um e-mail válido.");
