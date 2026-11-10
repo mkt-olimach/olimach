@@ -1,0 +1,25 @@
+:root {
+  --navy-900: #0b1f4d;
+  --navy-700: #1a3a7a;
+  --blue-500: #1e63c7;
+  --orange-500: #f28a1e;
+  --orange-600: #d9730d;
+  --safety-yellow: #f5c400;
+
+  --bg: #f5f7fa;
+  --surface: #ffffff;
+  --border: #e3e8ef;
+  --text: #1c2433;
+  --muted: #6b7689;
+
+  --success: #1f9d55;
+  --warning: #e0a100;
+  --danger: #d64545;
+
+  --radius-card: 12px;
+  --radius-btn-landing: 999px;
+  --radius-btn-admin: 10px;
+
+  --font-heading: "Plus Jakarta Sans Variable", "Plus Jakarta Sans", system-ui, sans-serif;
+  --font-body: "Inter Variable", "Inter", system-ui, sans-serif;
+}

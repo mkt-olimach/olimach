@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 520" role="img" aria-label="Capacete de segurança em ambiente industrial offshore">
+<defs>
+<linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1A3A7A"/><stop offset="1" stop-color="#0B1F4D"/></linearGradient>
+<linearGradient id="hat" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFE259"/><stop offset="1" stop-color="#F5C400"/></linearGradient>
+</defs>
+<rect width="600" height="520" fill="url(#bg)"/>
+<g opacity=".28" transform="translate(240 470) scale(1.05)"><g><rect x="-125" y="-95" width="14" height="110" fill="#6B8FD1"/><rect x="-45" y="-95" width="14" height="110" fill="#6B8FD1"/><rect x="35" y="-95" width="14" height="110" fill="#6B8FD1"/><rect x="115" y="-95" width="14" height="110" fill="#6B8FD1"/><line x1="-118" y1="-90" x2="-38" y2="5" stroke="#6B8FD1" stroke-width="5"/><line x1="-38" y1="-90" x2="-118" y2="5" stroke="#6B8FD1" stroke-width="5"/><line x1="-38" y1="-90" x2="42" y2="5" stroke="#6B8FD1" stroke-width="5"/><line x1="42" y1="-90" x2="-38" y2="5" stroke="#6B8FD1" stroke-width="5"/><line x1="42" y1="-90" x2="122" y2="5" stroke="#6B8FD1" stroke-width="5"/><line x1="122" y1="-90" x2="42" y2="5" stroke="#6B8FD1" stroke-width="5"/><rect x="-180" y="-135" width="360" height="42" fill="#6B8FD1"/><rect x="-140" y="-178" width="210" height="46" fill="#6B8FD1"/><rect x="-110" y="-208" width="56" height="34" fill="#6B8FD1"/><rect x="26" y="-200" width="52" height="26" fill="#6B8FD1"/><path d="M-52 -175 L-24 -345 L4 -175 Z" fill="none" stroke="#6B8FD1" stroke-width="5"/><line x1="-47.8" y1="-200.5" x2="-0.20000000000000018" y2="-200.5" stroke="#6B8FD1" stroke-width="3"/><line x1="-43.6" y1="-226.0" x2="-4.4" y2="-226.0" stroke="#6B8FD1" stroke-width="3"/><line x1="-39.4" y1="-251.5" x2="-8.6" y2="-251.5" stroke="#6B8FD1" stroke-width="3"/><line x1="-35.2" y1="-277.0" x2="-12.8" y2="-277.0" stroke="#6B8FD1" stroke-width="3"/><line x1="-31.0" y1="-302.5" x2="-17.0" y2="-302.5" stroke="#6B8FD1" stroke-width="3"/><rect x="-30" y="-360" width="12" height="20" fill="#6B8FD1"/><polyline points="118,-175 140,-265 235,-205" fill="none" stroke="#6B8FD1" stroke-width="6"/><line x1="235" y1="-205" x2="235" y2="-170" stroke="#6B8FD1" stroke-width="3"/><rect x="150" y="-182" width="100" height="8" fill="#6B8FD1"/><rect x="190" y="-176" width="8" height="40" fill="#6B8FD1"/><rect x="-150" y="-270" width="5" height="100" fill="#6B8FD1"/><ellipse cx="-147" cy="-282" rx="8" ry="14" fill="#F28A1E"/></g></g>
+<path d="M0 430 Q 150 410 300 430 T 600 424 L600 520 L0 520 Z" fill="#0B1F4D" opacity=".7"/>
+<path d="M130 520 L150 400 Q 300 350 450 400 L470 520 Z" fill="#0B1F4D"/>
+<path d="M205 372 L300 440 L395 372 L420 395 L300 480 L180 395 Z" fill="#F28A1E"/>
+<rect x="172" y="470" width="256" height="14" fill="#F5F7FA" opacity=".85" transform="rotate(0)"/>
+<ellipse cx="300" cy="332" rx="62" ry="22" fill="#05102B" opacity=".55"/>
+<path d="M180 300 A120 120 0 0 1 420 300 Z" fill="url(#hat)"/>
+<path d="M270 200 Q300 190 330 200 L326 300 L274 300 Z" fill="#E0A100" opacity=".55"/>
+<rect x="150" y="296" width="300" height="22" rx="11" fill="#E0A100"/>
+<path d="M205 245 Q 230 205 270 192" fill="none" stroke="#fff" stroke-width="7" stroke-linecap="round" opacity=".5"/>
+</svg>
