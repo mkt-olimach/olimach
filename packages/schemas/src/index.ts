@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { isValidCpf, onlyDigits } from "./cpf";
 
-export { isValidCpf, maskCpf, onlyDigits } from "./cpf";
+export { formatCpf, isValidCpf, maskCpf, onlyDigits } from "./cpf";
 
 /* Alfabeto do codigo publico do certificado: 32 simbolos sem ambiguos (0, 1, I, O).
    Deve ser o mesmo de public.generate_certificate_code() no banco. */
@@ -18,34 +18,51 @@ export const certificateCodeSchema = z
   );
 
 const uuid = z.string().uuid();
-const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Data invalida");
+const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Informe uma data valida");
 
 export const courseCategorySchema = z.enum(["nr", "profissionalizante", "parceria"]);
 export type CourseCategory = z.infer<typeof courseCategorySchema>;
 
 export const courseModalitySchema = z.enum(["presencial", "online", "hibrido"]);
 
+const courseFields = {
+  slug: z.string().regex(/^[a-z0-9]+(-[a-z0-9]+)*$/, "Use letras minusculas, numeros e hifens"),
+  name: z.string().trim().min(3, "Informe o nome do treinamento"),
+  category: courseCategorySchema,
+  nr_code: z
+    .string()
+    .regex(/^NR-\d{1,2}$/, "Use o formato NR-35")
+    .nullable(),
+  workload_hours: z.number({ invalid_type_error: "Informe a carga horaria" }).int("Use horas inteiras").positive("A carga horaria deve ser maior que zero"),
+  syllabus: z.string(),
+  modality: courseModalitySchema,
+  validity_months: z.number().int().positive("A validade deve ser maior que zero").nullable(),
+  active: z.boolean(),
+};
+const nrCodeMatchesCategory = {
+  check: (c: { category: CourseCategory; nr_code: string | null }) => (c.category === "nr") === (c.nr_code !== null),
+  message: "Informe o codigo da NR (ex.: NR-35) somente para cursos de NR",
+};
+
+export const courseInputSchema = z
+  .object(courseFields)
+  .refine(nrCodeMatchesCategory.check, { message: nrCodeMatchesCategory.message, path: ["nr_code"] });
+export type CourseInput = z.infer<typeof courseInputSchema>;
+
 export const courseSchema = z
-  .object({
-    id: uuid,
-    slug: z.string().regex(/^[a-z0-9]+(-[a-z0-9]+)*$/),
-    name: z.string().min(3),
-    category: courseCategorySchema,
-    nr_code: z
-      .string()
-      .regex(/^NR-\d{1,2}$/)
-      .nullable(),
-    workload_hours: z.number().int().positive(),
-    syllabus: z.string(),
-    modality: courseModalitySchema,
-    validity_months: z.number().int().positive().nullable(),
-    active: z.boolean(),
-  })
-  .refine((c) => (c.category === "nr") === (c.nr_code !== null), {
-    message: "nr_code e obrigatorio para NR e proibido nas demais categorias",
-    path: ["nr_code"],
-  });
+  .object({ id: uuid, ...courseFields })
+  .refine(nrCodeMatchesCategory.check, { message: nrCodeMatchesCategory.message, path: ["nr_code"] });
 export type Course = z.infer<typeof courseSchema>;
+
+/** Gera o slug a partir do nome (sem acentos, minusculas, hifens). */
+export function slugify(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
 
 /** Cursos de parceria nao emitem certificado (espelha o trigger do banco). */
 export function canIssueCertificate(category: CourseCategory): boolean {
@@ -59,24 +76,39 @@ export const personRegistrySchema = z.object({
   registry: z.string().min(1),
   signature_path: z.string().nullable(),
 });
+/** Dados editaveis de instrutor e responsavel tecnico (a assinatura vai por upload separado). */
+export const personInputSchema = z.object({
+  name: z.string().trim().min(3, "Informe o nome completo"),
+  qualification: z.string().trim().min(2, "Informe a qualificacao (ex.: Engenheiro de Seguranca do Trabalho)"),
+  registry: z.string().trim().min(1, "Informe o registro profissional (ex.: CREA-RJ 000000)"),
+});
+export type PersonInput = z.infer<typeof personInputSchema>;
+
 export const instructorSchema = personRegistrySchema;
 export const technicalLeadSchema = personRegistrySchema;
 
 export const classStatusSchema = z.enum(["planned", "ongoing", "completed", "cancelled"]);
 
+const classFields = {
+  course_id: uuid,
+  start_date: isoDate,
+  end_date: isoDate,
+  location: z.string().trim().min(2, "Informe o local do treinamento"),
+  status: classStatusSchema,
+};
+const datesOrdered = {
+  check: (c: { start_date: string; end_date: string }) => c.end_date >= c.start_date,
+  message: "A data final nao pode ser anterior a inicial",
+};
+
+export const classInputSchema = z
+  .object({ ...classFields, course_id: z.string().uuid("Escolha o treinamento") })
+  .refine(datesOrdered.check, { message: datesOrdered.message, path: ["end_date"] });
+export type ClassInput = z.infer<typeof classInputSchema>;
+
 export const classSchema = z
-  .object({
-    id: uuid,
-    course_id: uuid,
-    start_date: isoDate,
-    end_date: isoDate,
-    location: z.string().min(2),
-    status: classStatusSchema,
-  })
-  .refine((c) => c.end_date >= c.start_date, {
-    message: "A data final nao pode ser anterior a inicial",
-    path: ["end_date"],
-  });
+  .object({ id: uuid, ...classFields })
+  .refine(datesOrdered.check, { message: datesOrdered.message, path: ["end_date"] });
 
 export const studentInputSchema = z.object({
   full_name: z.string().trim().min(3, "Informe o nome completo"),

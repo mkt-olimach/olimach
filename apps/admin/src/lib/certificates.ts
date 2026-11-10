@@ -9,6 +9,8 @@ export interface CertificateRow {
   expiresAt: string | null;
   status: CertificateDisplayStatus;
   hasPdf: boolean;
+  pdfPath: string | null;
+  revokedReason: string | null;
   studentName: string;
   studentCpf: string;
   courseName: string;
@@ -28,6 +30,7 @@ interface RawCertificate {
   expires_at: string | null;
   status: "valid" | "revoked";
   pdf_path: string | null;
+  revoked_reason: string | null;
   enrollment: {
     student: { full_name: string; cpf: string } | null;
     class: { course: { name: string; workload_hours: number | null } | null } | null;
@@ -45,6 +48,7 @@ function effectiveStatus(raw: RawCertificate): CertificateDisplayStatus {
 const LOAD_LIMIT = 500;
 
 export function useDashboardData() {
+  const [version, setVersion] = useState(0);
   const [rows, setRows] = useState<CertificateRow[]>([]);
   const [stats, setStats] = useState<DashboardStats>({ certificates: null, students: null, activeCourses: null });
   const [loading, setLoading] = useState(Boolean(supabase));
@@ -60,7 +64,7 @@ export function useDashboardData() {
         client
           .from("certificates")
           .select(
-            "id, code, issued_at, expires_at, status, pdf_path, enrollment:enrollments(student:students(full_name, cpf), class:classes(course:courses(name, workload_hours)))",
+            "id, code, issued_at, expires_at, status, pdf_path, revoked_reason, enrollment:enrollments(student:students(full_name, cpf), class:classes(course:courses(name, workload_hours)))",
           )
           .order("issued_at", { ascending: false })
           .limit(LOAD_LIMIT),
@@ -82,6 +86,8 @@ export function useDashboardData() {
             expiresAt: r.expires_at,
             status: effectiveStatus(r),
             hasPdf: Boolean(r.pdf_path),
+            pdfPath: r.pdf_path,
+            revokedReason: r.revoked_reason,
             studentName: r.enrollment?.student?.full_name ?? "-",
             studentCpf: r.enrollment?.student?.cpf ?? "",
             courseName: r.enrollment?.class?.course?.name ?? "-",
@@ -101,9 +107,9 @@ export function useDashboardData() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [version]);
 
-  return { rows, stats, loading, error };
+  return { rows, stats, loading, error, reload: () => setVersion((v) => v + 1) };
 }
 
 export function formatDate(iso: string | null): string {
@@ -117,4 +123,13 @@ export function initials(name: string): string {
   const first = parts[0] ?? "";
   const last = parts.length > 1 ? (parts[parts.length - 1] ?? "") : "";
   return `${first.charAt(0)}${last.charAt(0)}`.toUpperCase();
+}
+
+/** Abre o PDF em nova aba por URL assinada de curta duracao (o bucket e privado). */
+export async function openCertificatePdf(path: string): Promise<string | null> {
+  if (!supabase) return "Ambiente sem conexão com o banco configurada.";
+  const { data, error } = await supabase.storage.from("certificates").createSignedUrl(path, 45);
+  if (error || !data) return "Não foi possível abrir o PDF. Tente novamente.";
+  window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+  return null;
 }

@@ -17,7 +17,7 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { formatDate, initials, useDashboardData } from "../lib/certificates";
+import { formatDate, initials, openCertificatePdf, useDashboardData } from "../lib/certificates";
 import type { CertificateRow } from "../lib/certificates";
 
 const PAGE_SIZE = 6;
@@ -151,9 +151,12 @@ function CertificatePreview({ row }: { row: CertificateRow }) {
         )}
         <button
           type="button"
-          disabled
-          title={row.hasPdf ? "Download do PDF depende da função de geração (pendente)" : "PDF ainda não gerado"}
-          className="inline-flex min-w-[100px] flex-1 items-center justify-center gap-2 rounded-[10px] border border-line bg-canvas px-3 py-3 text-xs font-semibold text-navy-900 opacity-60"
+          disabled={!row.hasPdf}
+          onClick={() => {
+            if (row.pdfPath) void openCertificatePdf(row.pdfPath);
+          }}
+          title={row.hasPdf ? "Abrir o PDF do certificado" : "PDF ainda não gerado"}
+          className="inline-flex min-w-[100px] flex-1 items-center justify-center gap-2 rounded-[10px] border border-line bg-canvas px-3 py-3 text-xs font-semibold text-navy-900 hover:bg-line/40 disabled:opacity-60"
         >
           <ArrowDownToLine size={15} aria-hidden /> Baixar PDF
         </button>

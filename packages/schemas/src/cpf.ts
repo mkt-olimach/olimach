@@ -27,3 +27,11 @@ export function maskCpf(value: string): string {
   if (cpf.length !== 11) return "***.***.***-**";
   return `***.${cpf.slice(3, 6)}.${cpf.slice(6, 9)}-**`;
 }
+
+/** Formata para exibicao e digitacao: 000.000.000-00 (aceita entrada parcial). */
+export function formatCpf(value: string): string {
+  const d = onlyDigits(value).slice(0, 11);
+  const parts = [d.slice(0, 3), d.slice(3, 6), d.slice(6, 9)].filter(Boolean);
+  const base = parts.join(".");
+  return d.length > 9 ? `${base}-${d.slice(9)}` : base;
+}
