@@ -32,3 +32,20 @@ A funcao precisa de JWT (padrao): nao use `--no-verify-jwt`.
 - O PDF e enviado antes do registro (o banco exige `pdf_path` e `pdf_sha256`). Se o registro falhar, o PDF fica orfao
   no Storage (nao ha exclusao permitida); e inofensivo, o codigo e unico.
 - O gerador fica em `_shared/certificate-pdf.ts` e tem testes em `supabase/tests/certificate-pdf.test.ts`.
+
+## invite-user
+
+Convida um usuario da equipe por e-mail (somente administrador). E o **unico** ponto do projeto que usa a
+`service_role` (necessaria para criar contas no Auth); a chave existe so no ambiente da funcao.
+
+| Segredo | Exemplo | Para que |
+|---|---|---|
+| `ADMIN_URL` | `https://admin.olimach.com.br` | destino do link do convite (`<ADMIN_URL>/redefinir-senha`) |
+
+```bash
+supabase functions deploy invite-user
+```
+
+Fluxo: valida o JWT do chamador (`is_admin`), envia o convite (`inviteUserByEmail`) e cria o perfil (nome e papel).
+A pessoa abre o link, define a senha em `/redefinir-senha` e entra. Se a criacao do perfil falhar, a conta e removida.
+Configure o SMTP em Authentication > Emails e a URL do painel em Authentication > URL Configuration.

@@ -7,7 +7,8 @@ import { Courses } from "./pages/Courses";
 import { Dashboard } from "./pages/Dashboard";
 import { Login } from "./pages/Login";
 import { People } from "./pages/People";
-import { Placeholder } from "./pages/Placeholder";
+import { Reports } from "./pages/Reports";
+import { Settings } from "./pages/Settings";
 import { Students } from "./pages/Students";
 import { ResetPassword } from "./pages/ResetPassword";
 
@@ -24,8 +25,8 @@ export function App() {
         <Route path="/turmas/:id" element={<ClassDetail />} />
         <Route path="/certificados" element={<Certificates />} />
         <Route path="/instrutores" element={<People />} />
-        <Route path="/relatorios" element={<Placeholder title="Relatórios" />} />
-        <Route path="/configuracoes" element={<Placeholder title="Configurações" />} />
+        <Route path="/relatorios" element={<Reports />} />
+        <Route path="/configuracoes" element={<Settings />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

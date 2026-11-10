@@ -198,7 +198,9 @@ export function dbErrorMessage(error: { code?: string; message?: string }, subje
     case "42501":
       return "Seu perfil não tem permissão para esta ação.";
     case "23514":
-      return error.message?.includes("parceria") ? "Curso com certificados emitidos não pode virar parceria." : "Os dados não respeitam as regras do cadastro.";
+      if (error.message?.includes("parceria")) return "Curso com certificados emitidos não pode virar parceria.";
+      if (error.message?.includes("administrador")) return "Deve existir ao menos um administrador ativo.";
+      return "Os dados não respeitam as regras do cadastro.";
     default:
       return "Não foi possível concluir a operação. Tente novamente.";
   }

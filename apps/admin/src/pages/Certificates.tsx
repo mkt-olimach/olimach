@@ -9,6 +9,7 @@ import { useAuth } from "../lib/auth";
 import { formatDate, initials, openCertificatePdf, useDashboardData } from "../lib/certificates";
 import type { CertificateRow } from "../lib/certificates";
 import { formatPeriod } from "../lib/classes";
+import { functionErrorMessage } from "../lib/functions";
 import { supabase } from "../lib/supabase";
 import { useToast } from "../lib/toast";
 
@@ -19,20 +20,6 @@ interface Eligible {
   student: { full_name: string; cpf: string } | null;
   class: { start_date: string; end_date: string; course: { name: string; category: string } | null } | null;
   certificates: Array<{ status: "valid" | "revoked" }>;
-}
-
-/** Mensagem de erro da Edge Function (corpo JSON { error }) ou texto generico. */
-async function functionError(error: unknown): Promise<string> {
-  const context = (error as { context?: Response } | null)?.context;
-  if (context && typeof context.json === "function") {
-    try {
-      const body = (await context.json()) as { error?: string };
-      if (body.error) return body.error;
-    } catch {
-      /* corpo nao era JSON */
-    }
-  }
-  return "Não foi possível emitir o certificado. Tente novamente.";
 }
 
 function IssueDialog({ presetEnrollment, onIssued, onClose }: { presetEnrollment: string | null; onIssued: () => void; onClose: () => void }) {
@@ -90,7 +77,7 @@ function IssueDialog({ presetEnrollment, onIssued, onClose }: { presetEnrollment
     });
     setBusy(false);
     if (err || !data) {
-      setError(await functionError(err));
+      setError(await functionErrorMessage(err, "Não foi possível emitir o certificado. Tente novamente."));
       return;
     }
     toast.success(`Certificado ${data.code} emitido.`);

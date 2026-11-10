@@ -262,3 +262,23 @@ describe("validacao publica", () => {
     expect(last?.status).toBe("rate_limited");
   });
 });
+
+describe("perfis: ultimo administrador", () => {
+  it("bloqueia rebaixar, desativar ou excluir o unico admin ativo", async () => {
+    await expect(q(`update public.profiles set role = 'secretaria' where id = '${ADMIN}'`)).rejects.toThrow(/ao menos um administrador/);
+    await expect(q(`update public.profiles set active = false where id = '${ADMIN}'`)).rejects.toThrow(/ao menos um administrador/);
+    await expect(q(`delete from public.profiles where id = '${ADMIN}'`)).rejects.toThrow(/ao menos um administrador/);
+  });
+
+  it("permite quando existe outro admin ativo e nao afeta a secretaria", async () => {
+    await q(`update public.profiles set role = 'admin' where id = '${SECRETARIA}'`);
+    await q(`update public.profiles set active = false where id = '${ADMIN}'`);
+    // agora a "secretaria" e a unica admin ativa: protegida
+    await expect(q(`update public.profiles set active = false where id = '${SECRETARIA}'`)).rejects.toThrow(/ao menos um administrador/);
+    // restaura o estado para os demais testes
+    await q(`update public.profiles set active = true where id = '${ADMIN}'`);
+    await q(`update public.profiles set role = 'secretaria' where id = '${SECRETARIA}'`);
+    const rows = await q<{ role: string }>(`select role from public.profiles where id = '${SECRETARIA}'`);
+    expect(rows[0]?.role).toBe("secretaria");
+  });
+});
