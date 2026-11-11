@@ -18,13 +18,12 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { CertificateActionsMenu } from "../components/CertificateActionsMenu";
 import { useAuth } from "../lib/auth";
+import { SITE_URL } from "../lib/site-url";
 import { formatDate, initials, openCertificatePdf, useDashboardData } from "../lib/certificates";
 import { RevokeDialog } from "./Certificates";
 import type { CertificateRow } from "../lib/certificates";
 
 const PAGE_SIZE = 6;
-/** Dominio publico do site (validacao). Definido por VITE_SITE_URL; sem ele o link fica [PENDENTE]. */
-const SITE_URL = ((import.meta.env.VITE_SITE_URL as string | undefined) ?? "").replace(/\/$/, "");
 
 type Tab = "all" | "valid" | "expired" | "revoked";
 const tabs: Array<{ id: Tab; label: string }> = [
