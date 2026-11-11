@@ -65,6 +65,11 @@ function IssueDialog({ presetEnrollment, onIssued, onClose }: { presetEnrollment
     return (eligible ?? []).filter((e) => !q || `${e.student?.full_name ?? ""} ${e.class?.course?.name ?? ""}`.toLowerCase().includes(q));
   }, [eligible, query]);
 
+  // Uma unica opcao visivel e nada escolhido: seleciona (evita o erro "escolha o aluno" depois de filtrar).
+  useEffect(() => {
+    if (!enrollmentId && visible.length === 1 && visible[0]) setEnrollmentId(visible[0].id);
+  }, [visible, enrollmentId]);
+
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
     if (!supabase) return;
@@ -93,17 +98,35 @@ function IssueDialog({ presetEnrollment, onIssued, onClose }: { presetEnrollment
           <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Filtrar por aluno ou treinamento..." className="w-full min-w-0 bg-transparent text-xs text-ink outline-none placeholder:text-[#a1adc0]" />
         </label>
 
-        <Field label="Aluno e turma">
+        <Field label="Aluno e turma" hint={enrollmentId ? undefined : "Clique em uma linha para selecionar."}>
           {(p) => (
-            <select {...p} size={Math.min(6, Math.max(3, visible.length))} className={cn(inputClass, "h-auto")} value={enrollmentId} onChange={(e) => setEnrollmentId(e.target.value)}>
-              {eligible === null && <option disabled>Carregando...</option>}
-              {eligible !== null && visible.length === 0 && <option disabled>Nenhuma matrícula apta para emitir.</option>}
-              {visible.map((e) => (
-                <option key={e.id} value={e.id}>
-                  {e.student?.full_name} ({e.student ? maskCpf(e.student.cpf) : "-"}) · {e.class?.course?.name} · {e.class ? formatPeriod(e.class.start_date, e.class.end_date) : ""}
-                </option>
-              ))}
-            </select>
+            <div id={p.id} role="listbox" aria-label="Matrículas aptas" aria-describedby={p["aria-describedby"]} className="mt-1.5 max-h-56 divide-y divide-line overflow-y-auto rounded-btn-admin border border-line">
+              {eligible === null && <p className="px-3 py-3 text-xs text-muted">Carregando...</p>}
+              {eligible !== null && visible.length === 0 && <p className="px-3 py-3 text-xs text-muted">Nenhuma matrícula apta para emitir.</p>}
+              {visible.map((e) => {
+                const selected = e.id === enrollmentId;
+                return (
+                  <button
+                    key={e.id}
+                    type="button"
+                    role="option"
+                    aria-selected={selected}
+                    onClick={() => {
+                      setEnrollmentId(e.id);
+                      setError(null);
+                    }}
+                    className={cn("flex w-full flex-col items-start gap-0.5 px-3 py-2.5 text-left text-xs hover:bg-canvas", selected && "bg-navy-900 text-white hover:bg-navy-900")}
+                  >
+                    <span className="font-semibold">
+                      {e.student?.full_name} <span className={cn("font-normal", selected ? "text-white/70" : "text-muted")}>({e.student ? maskCpf(e.student.cpf) : "-"})</span>
+                    </span>
+                    <span className={selected ? "text-white/80" : "text-muted"}>
+                      {e.class?.course?.name} · {e.class ? formatPeriod(e.class.start_date, e.class.end_date) : ""}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
           )}
         </Field>
 
