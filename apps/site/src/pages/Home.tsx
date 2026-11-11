@@ -20,7 +20,8 @@ import {
 import type { ReactNode } from "react";
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { categoryLabel, courses, faq } from "../content/courses";
+import { categoryLabel, faq, modalityLabel } from "../content/courses";
+import { useCatalog } from "../lib/catalog";
 import { courseWhatsappMessage, whatsappLink } from "../lib/whatsapp";
 
 const generalMessage = "Olá! Gostaria de mais informações sobre os treinamentos da Olimach.";
@@ -57,6 +58,7 @@ function Eyebrow({ children, className }: { children: ReactNode; className?: str
 export function Home() {
   const [params] = useSearchParams();
   const [showAll, setShowAll] = useState(false);
+  const { courses, loading: loadingCourses } = useCatalog();
   const query = (params.get("q") ?? "").trim().toLowerCase();
 
   const matches = query
@@ -285,8 +287,8 @@ export function Home() {
             >
               <div className="relative h-40 overflow-hidden md:h-44">
                 <img
-                  src={courseImages[courses.indexOf(course) % courseImages.length]}
-                  alt={`Ambiente de treinamento offshore, curso ${course.name}`}
+                  src={course.coverUrl ?? courseImages[courses.indexOf(course) % courseImages.length]}
+                  alt={course.coverUrl ? `Capa do treinamento ${course.name}` : `Ambiente de treinamento offshore, curso ${course.name}`}
                   loading="lazy"
                   decoding="async"
                   className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
@@ -299,7 +301,15 @@ export function Home() {
                   {course.summary ?? <Pending>descrição, carga horária e modalidade</Pending>}
                 </p>
                 <p className="mb-4 flex items-center gap-2 text-[11px] text-[#7d90a7]">
-                  <GraduationCap size={15} aria-hidden /> <Pending>modalidade</Pending>
+                  <GraduationCap size={15} aria-hidden />
+                  {course.modality ? (
+                    <span>
+                      {modalityLabel[course.modality]}
+                      {course.workloadHours ? ` · ${course.workloadHours} h` : ""}
+                    </span>
+                  ) : (
+                    <Pending>modalidade</Pending>
+                  )}
                 </p>
                 <a
                   href={whatsappLink(courseWhatsappMessage(course.name))}
@@ -312,7 +322,11 @@ export function Home() {
               </div>
             </article>
           ))}
-          {visible.length === 0 && <p className="text-muted">Nenhum curso encontrado.</p>}
+          {visible.length === 0 && (
+            <p className="text-muted">
+              {loadingCourses ? "Carregando treinamentos..." : courses.length === 0 ? "Em breve, novos treinamentos por aqui." : "Nenhum curso encontrado."}
+            </p>
+          )}
         </div>
       </section>
 

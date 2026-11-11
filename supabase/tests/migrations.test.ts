@@ -208,6 +208,26 @@ describe("RLS", () => {
     }
   });
 
+  it("anon lista so treinamentos ativos pelo RPC, sem SELECT na tabela e sem conteudo interno", async () => {
+    await db.exec("update public.courses set active = false, description = 'Descricao publica' where slug = 'barbeiro'");
+    try {
+      const rows = await as("anon", null, () => q<Record<string, unknown>>("select * from public.public_courses()"));
+      expect(rows.some((r) => r.slug === "barbeiro")).toBe(false);
+      expect(Object.keys(rows[0] ?? {})).not.toContain("syllabus");
+      expect(Object.keys(rows[0] ?? {})).toContain("cover_path");
+      await db.exec("update public.courses set active = true where slug = 'barbeiro'");
+      const again = await as("anon", null, () => q<{ slug: string; description: string }>("select slug, description from public.public_courses()"));
+      expect(again.find((r) => r.slug === "barbeiro")?.description).toBe("Descricao publica");
+    } finally {
+      await db.exec("update public.courses set active = true, description = '' where slug = 'barbeiro'");
+    }
+  });
+
+  it("bucket de capas e publico; os demais continuam privados", async () => {
+    const rows = await q<{ id: string; public: boolean }>("select id, public from storage.buckets order by id");
+    expect(Object.fromEntries(rows.map((r) => [r.id, r.public]))).toEqual({ certificates: false, "course-covers": true, signatures: false });
+  });
+
   it("secretaria opera alunos mas nao revoga, nao edita catalogo e nao le auditoria", async () => {
     await as("authenticated", SECRETARIA, async () => {
       expect((await q("select 1 from public.students")).length).toBeGreaterThan(0);

@@ -1,8 +1,8 @@
 import { courseInputSchema, slugify } from "@olimach/schemas";
 import type { CourseCategory } from "@olimach/schemas";
 import { Badge, Button, cn } from "@olimach/ui";
-import { Pencil, Plus, Power, Search, Trash2 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { ImagePlus, Pencil, Plus, Power, Search, Trash2 } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { ConfirmDialog, Field, Modal, PageHeader, dbErrorMessage, inputClass } from "../components/ui";
 import { useAuth } from "../lib/auth";
@@ -17,9 +17,20 @@ interface CourseRow {
   nr_code: string | null;
   workload_hours: number;
   syllabus: string;
+  description: string;
+  cover_path: string | null;
   modality: "presencial" | "online" | "hibrido";
   validity_months: number | null;
   active: boolean;
+}
+
+const COVER_BUCKET = "course-covers";
+const COVER_MAX_BYTES = 2 * 1024 * 1024;
+const COVER_TYPES: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" };
+
+function coverUrl(path: string | null): string | null {
+  if (!path || !supabase) return null;
+  return supabase.storage.from(COVER_BUCKET).getPublicUrl(path).data.publicUrl;
 }
 
 const categoryLabel: Record<CourseCategory, string> = {
@@ -28,7 +39,7 @@ const categoryLabel: Record<CourseCategory, string> = {
   parceria: "Parceria",
 };
 const modalityLabel = { presencial: "Presencial", online: "Online", hibrido: "Híbrido" } as const;
-const COLUMNS = "id, slug, name, category, nr_code, workload_hours, syllabus, modality, validity_months, active";
+const COLUMNS = "id, slug, name, category, nr_code, workload_hours, syllabus, description, cover_path, modality, validity_months, active";
 
 interface FormState {
   name: string;
@@ -39,6 +50,7 @@ interface FormState {
   modality: CourseRow["modality"];
   validity_months: string;
   syllabus: string;
+  description: string;
   active: boolean;
 }
 
@@ -51,6 +63,7 @@ const blank: FormState = {
   modality: "presencial",
   validity_months: "",
   syllabus: "",
+  description: "",
   active: true,
 };
 
@@ -63,6 +76,7 @@ const fromRow = (c: CourseRow): FormState => ({
   modality: c.modality,
   validity_months: c.validity_months != null ? String(c.validity_months) : "",
   syllabus: c.syllabus,
+  description: c.description,
   active: c.active,
 });
 
@@ -82,6 +96,28 @@ function CourseForm({
   const [slugTouched, setSlugTouched] = useState(Boolean(course));
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
+  const [coverFile, setCoverFile] = useState<File | null>(null);
+  const [coverPreview, setCoverPreview] = useState<string | null>(null);
+  const [removeCover, setRemoveCover] = useState(false);
+  const fileInput = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!coverFile) return setCoverPreview(null);
+    const url = URL.createObjectURL(coverFile);
+    setCoverPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [coverFile]);
+
+  const currentCover = coverPreview ?? (removeCover ? null : coverUrl(course?.cover_path ?? null));
+
+  function pickCover(file: File | undefined) {
+    if (!file) return;
+    if (!COVER_TYPES[file.type]) return setErrors((e) => ({ ...e, cover: "Use uma imagem PNG, JPG ou WebP." }));
+    if (file.size > COVER_MAX_BYTES) return setErrors((e) => ({ ...e, cover: "A imagem deve ter até 2 MB." }));
+    setErrors((e) => ({ ...e, cover: "" }));
+    setCoverFile(file);
+    setRemoveCover(false);
+  }
 
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) => setValues((v) => ({ ...v, [key]: value }));
 
@@ -95,6 +131,7 @@ function CourseForm({
       nr_code: values.category === "nr" ? values.nr_code.trim().toUpperCase() || null : null,
       workload_hours: values.workload_hours === "" ? Number.NaN : Number(values.workload_hours),
       syllabus: values.syllabus,
+      description: values.description,
       modality: values.modality,
       validity_months: values.validity_months === "" ? null : Number(values.validity_months),
       active: values.active,
@@ -111,14 +148,34 @@ function CourseForm({
     }
     setErrors({});
     setBusy(true);
+
+    const previousCover = course?.cover_path ?? null;
+    let coverPath = removeCover ? null : previousCover;
+    let uploaded: string | null = null;
+    if (coverFile) {
+      const path = `${parsed.data.slug}-${Date.now()}.${COVER_TYPES[coverFile.type]}`;
+      const { error: uploadError } = await supabase.storage.from(COVER_BUCKET).upload(path, coverFile, { contentType: coverFile.type, cacheControl: "31536000" });
+      if (uploadError) {
+        setBusy(false);
+        toast.error("Não foi possível enviar a imagem de capa. Tente novamente.");
+        return;
+      }
+      uploaded = path;
+      coverPath = path;
+    }
+
+    const payload = { ...parsed.data, cover_path: coverPath };
     const { error } = course
-      ? await supabase.from("courses").update(parsed.data).eq("id", course.id)
-      : await supabase.from("courses").insert(parsed.data);
+      ? await supabase.from("courses").update(payload).eq("id", course.id)
+      : await supabase.from("courses").insert(payload);
     setBusy(false);
     if (error) {
+      // nao deixa arquivo orfao quando o cadastro falha
+      if (uploaded) await supabase.storage.from(COVER_BUCKET).remove([uploaded]);
       toast.error(dbErrorMessage(error, { unique: "Já existe um treinamento com este identificador." }));
       return;
     }
+    if (previousCover && previousCover !== coverPath) await supabase.storage.from(COVER_BUCKET).remove([previousCover]);
     toast.success(course ? "Treinamento atualizado." : "Treinamento cadastrado.");
     onSaved();
   }
@@ -210,6 +267,58 @@ function CourseForm({
                 set("slug", e.target.value);
               }}
             />
+          )}
+        </Field>
+
+        <Field label="Descrição do treinamento" error={errors.description} hint={`Exibida na página inicial do site. ${values.description.length}/1000 caracteres.`}>
+          {(p) => (
+            <textarea
+              {...p}
+              rows={4}
+              maxLength={1000}
+              className={cn(inputClass, "resize-y")}
+              value={values.description}
+              onChange={(e) => set("description", e.target.value)}
+              placeholder="Resumo do que o aluno aprende e a quem o treinamento se destina."
+            />
+          )}
+        </Field>
+
+        <Field label="Imagem de capa" error={errors.cover} hint="PNG, JPG ou WebP, até 2 MB. Proporção sugerida 16:9 (ex.: 1280 x 720). Aparece no card do site.">
+          {(p) => (
+            <div className="flex items-center gap-4">
+              <div className="grid h-[88px] w-40 shrink-0 place-items-center overflow-hidden rounded-[10px] border border-dashed border-line bg-canvas text-muted">
+                {currentCover ? <img src={currentCover} alt="Pré-visualização da capa" className="h-full w-full object-cover" /> : <ImagePlus size={24} aria-hidden />}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <input
+                  {...p}
+                  ref={fileInput}
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  className="sr-only"
+                  onChange={(e) => {
+                    pickCover(e.target.files?.[0]);
+                    e.target.value = "";
+                  }}
+                />
+                <Button variant="secondary" onClick={() => fileInput.current?.click()} disabled={busy}>
+                  {currentCover ? "Trocar imagem" : "Enviar imagem"}
+                </Button>
+                {currentCover && (
+                  <Button
+                    variant="secondary"
+                    onClick={() => {
+                      setCoverFile(null);
+                      setRemoveCover(true);
+                    }}
+                    disabled={busy}
+                  >
+                    Remover
+                  </Button>
+                )}
+              </div>
+            </div>
           )}
         </Field>
 
@@ -356,8 +465,19 @@ export function Courses() {
               {visible.map((c) => (
                 <tr key={c.id} className="border-b border-line text-[11px] text-[#4b5b70]">
                   <td className="px-2.5 py-3">
-                    <span className="block max-w-[280px] font-medium text-ink">{c.name}</span>
-                    {c.nr_code && <span className="text-[10px] text-muted">{c.nr_code}</span>}
+                    <span className="flex items-center gap-3">
+                      {coverUrl(c.cover_path) ? (
+                        <img src={coverUrl(c.cover_path) ?? undefined} alt="" loading="lazy" className="h-9 w-14 shrink-0 rounded-md object-cover" />
+                      ) : (
+                        <span className="grid h-9 w-14 shrink-0 place-items-center rounded-md bg-canvas text-muted" aria-hidden>
+                          <ImagePlus size={15} />
+                        </span>
+                      )}
+                      <span>
+                        <span className="block max-w-[260px] font-medium text-ink">{c.name}</span>
+                        {c.nr_code && <span className="text-[10px] text-muted">{c.nr_code}</span>}
+                      </span>
+                    </span>
                   </td>
                   <td className="px-2.5 py-3">
                     <Badge tone={c.category === "parceria" ? "warning" : "neutral"}>{categoryLabel[c.category]}</Badge>
@@ -366,7 +486,7 @@ export function Courses() {
                   <td className="px-2.5 py-3">{modalityLabel[c.modality]}</td>
                   <td className="whitespace-nowrap px-2.5 py-3">{c.validity_months ? `${c.validity_months} meses` : "Sem validade"}</td>
                   <td className="px-2.5 py-3">
-                    <Badge tone={c.active ? "success" : "neutral"}>{c.active ? "Ativo" : "Inativo"}</Badge>
+                    <Badge tone={c.active ? "success" : "neutral"}>{c.active ? "Ativo no site" : "Inativo"}</Badge>
                   </td>
                   <td className="px-2.5 py-3">
                     <div className="flex justify-end gap-1">

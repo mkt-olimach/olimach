@@ -30,6 +30,19 @@ describe("courseInputSchema", () => {
   });
 });
 
+describe("descricao e capa", () => {
+  it("assume descricao vazia e sem capa quando omitidas", () => {
+    const parsed = courseInputSchema.parse(base);
+    expect(parsed.description).toBe("");
+    expect(parsed.cover_path).toBeNull();
+  });
+
+  it("limita a descricao a 1000 caracteres", () => {
+    expect(courseInputSchema.safeParse({ ...base, description: "a".repeat(1000) }).success).toBe(true);
+    expect(courseInputSchema.safeParse({ ...base, description: "a".repeat(1001) }).success).toBe(false);
+  });
+});
+
 describe("slugify", () => {
   it("remove acentos e pontuacao", () => {
     expect(slugify("Movimentação de Cargas")).toBe("movimentacao-de-cargas");
