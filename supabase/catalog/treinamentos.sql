@@ -71,3 +71,14 @@ on conflict (slug) do update set
   syllabus = excluded.syllabus,
   name = excluded.name,
   active = true;
+
+-- Remove os treinamentos de exemplo do seed que nao constam nos certificados de referencia.
+-- So apaga os que nao tem turma cadastrada; os com turma continuam e ficam inativos (inative-os
+-- tambem no painel se preferir). Rodar este arquivo de novo e seguro.
+delete from public.courses c
+where c.slug in ('nr-10', 'cpso-primeiros-socorros', 'cuidador-de-idoso', 'barbeiro')
+  and not exists (select 1 from public.classes cl where cl.course_id = c.id);
+
+update public.courses
+set active = false
+where slug in ('nr-10', 'cpso-primeiros-socorros', 'cuidador-de-idoso', 'barbeiro');

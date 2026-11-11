@@ -16,19 +16,22 @@ export interface SiteCourse {
 
 export const modalityLabel = { presencial: "Presencial", online: "Online", hibrido: "Híbrido" } as const;
 
-/* Os 10 cursos que emitem certificado. Mesmos slugs de supabase/seed.sql.
-   Carga horaria e descricao so entram aqui depois de confirmadas pela Olimach. */
+/* Treinamentos dos certificados de referencia (mesmos slugs de supabase/catalog/treinamentos.sql).
+   Usada somente quando o banco nao esta configurado ou nao responde; o normal e vir do painel. */
 export const courses: SiteCourse[] = [
-  { slug: "nr-10", name: "NR-10 Segurança em Instalações e Serviços em Eletricidade", category: "nr", summary: "Segurança em instalações e serviços com eletricidade.", tag: "Segurança elétrica" },
+  { slug: "nr-12", name: "NR-12 Capacitação em Máquinas e Equipamentos", category: "nr", summary: "Trabalho seguro com máquinas e equipamentos, proteções e bloqueio de funcionamento.", tag: "Máquinas e equipamentos" },
+  { slug: "nr-18", name: "NR-18 Capacitação de Procedimentos de Segurança na Indústria", category: "nr", summary: "Procedimentos de segurança na construção, trabalho em altura e andaimes.", tag: "Construção" },
   { slug: "nr-33", name: "NR-33 Segurança e Saúde nos Trabalhos em Espaços Confinados", category: "nr", summary: "Segurança e procedimentos para trabalhos em espaços confinados.", tag: "Espaços confinados" },
+  { slug: "nr-34", name: "NR-34 Observador de Trabalhos a Quente", category: "nr", summary: "Classes de fogo, métodos de extinção e prevenção em trabalhos a quente.", tag: "Trabalho a quente" },
   { slug: "nr-35", name: "NR-35 Trabalho em Altura", category: "nr", summary: "Prevenção de riscos e procedimentos para trabalho em altura.", tag: "Trabalho em altura" },
   { slug: "nr-37", name: "NR-37 Segurança e Saúde em Plataformas de Petróleo", category: "nr", summary: "Segurança e saúde em plataformas de petróleo.", tag: "Plataformas de petróleo" },
-  { slug: "cpso-primeiros-socorros", name: "CPSO Primeiros Socorros", category: "profissionalizante", summary: "Capacitação voltada à resposta inicial em situações de emergência.", tag: "Segurança" },
-  { slug: "movimentacao-de-cargas", name: "Movimentação de Cargas", category: "profissionalizante", summary: "Fundamentos e cuidados em operações de movimentação de materiais.", tag: "Operações" },
-  { slug: "montador-de-andaime", name: "Montador de Andaime", category: "profissionalizante", summary: "Preparação para atividades relacionadas à montagem de andaimes.", tag: "Montagem" },
+  { slug: "movimentacao-de-cargas", name: "Movimentação de Cargas (AMC / Homem de Área)", category: "profissionalizante", summary: "Segurança pessoal, produtos químicos e movimentação de cargas.", tag: "Operações" },
+  { slug: "montador-de-andaime", name: "Montador de Andaime", category: "profissionalizante", summary: "Supervisão, montagem, desmontagem e segurança em andaimes.", tag: "Montagem" },
   { slug: "almoxarifado", name: "Almoxarifado", category: "profissionalizante", summary: "Organização, armazenagem e controle de materiais.", tag: "Logística" },
-  { slug: "cuidador-de-idoso", name: "Cuidador de Idoso", category: "profissionalizante", summary: "Noções aplicadas ao cuidado e à assistência cotidiana.", tag: "Cuidados" },
-  { slug: "barbeiro", name: "Barbeiro", category: "profissionalizante", summary: "Fundamentos para desenvolvimento de habilidades em barbearia.", tag: "Serviços" },
+  { slug: "pintura-industrial-n1", name: "Pintura Industrial N1", category: "profissionalizante", summary: "Preparação de superfície, tintas e esquemas de pintura industrial.", tag: "Pintura" },
+  { slug: "tecnicas-cozinheiro-offshore", name: "Técnicas para Cozinheiro Offshore", category: "profissionalizante", summary: "Hotelaria marítima, atendimento e segurança alimentar offshore.", tag: "Hotelaria offshore" },
+  { slug: "tecnicas-saloneiro-offshore", name: "Técnicas para Saloneiro Offshore", category: "profissionalizante", summary: "Hotelaria marítima, atendimento e rotinas do saloneiro.", tag: "Hotelaria offshore" },
+  { slug: "tecnicas-taifeiro-offshore", name: "Técnicas para Taifeiro Offshore", category: "profissionalizante", summary: "Biossegurança, atendimento e rotinas de trabalho do taifeiro.", tag: "Hotelaria offshore" },
 ];
 
 export const categoryLabel: Record<CourseCategory, string> = {
