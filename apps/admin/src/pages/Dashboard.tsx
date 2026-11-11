@@ -9,7 +9,6 @@ import {
   Copy,
   FilePlus,
   FileText,
-  MoreVertical,
   Plus,
   Search,
   UsersRound,
@@ -17,7 +16,10 @@ import {
 import type { LucideIcon } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import { CertificateActionsMenu } from "../components/CertificateActionsMenu";
+import { useAuth } from "../lib/auth";
 import { formatDate, initials, openCertificatePdf, useDashboardData } from "../lib/certificates";
+import { RevokeDialog } from "./Certificates";
 import type { CertificateRow } from "../lib/certificates";
 
 const PAGE_SIZE = 6;
@@ -167,7 +169,9 @@ function CertificatePreview({ row }: { row: CertificateRow }) {
 
 export function Dashboard() {
   const [params, setParams] = useSearchParams();
-  const { rows, stats, loading, error } = useDashboardData();
+  const { profile } = useAuth();
+  const { rows, stats, loading, error, reload } = useDashboardData();
+  const [revoking, setRevoking] = useState<CertificateRow | null>(null);
   const [tab, setTab] = useState<Tab>("all");
   const [page, setPage] = useState(1);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -321,9 +325,7 @@ export function Dashboard() {
                       <StatusBadge status={r.status} />
                     </td>
                     <td className="px-2.5 py-3 text-right">
-                      <button type="button" aria-label={`Selecionar certificado de ${r.studentName}`} className="rounded p-1 text-[#678099]">
-                        <MoreVertical size={16} aria-hidden />
-                      </button>
+                      <CertificateActionsMenu row={r} siteUrl={SITE_URL} canRevoke={profile?.role === "admin"} onRevoke={setRevoking} />
                     </td>
                   </tr>
                 ))}
@@ -391,6 +393,17 @@ export function Dashboard() {
           )}
         </aside>
       </section>
+
+      {revoking && (
+        <RevokeDialog
+          row={revoking}
+          onClose={() => setRevoking(null)}
+          onDone={() => {
+            setRevoking(null);
+            reload();
+          }}
+        />
+      )}
     </div>
   );
 }

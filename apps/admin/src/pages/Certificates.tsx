@@ -163,7 +163,7 @@ function IssueDialog({ presetEnrollment, onIssued, onClose }: { presetEnrollment
   );
 }
 
-function RevokeDialog({ row, onDone, onClose }: { row: CertificateRow; onDone: () => void; onClose: () => void }) {
+export function RevokeDialog({ row, onDone, onClose }: { row: CertificateRow; onDone: () => void; onClose: () => void }) {
   const toast = useToast();
   const [reason, setReason] = useState("");
   const [error, setError] = useState<string | null>(null);
