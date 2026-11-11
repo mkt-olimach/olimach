@@ -302,3 +302,25 @@ describe("perfis: ultimo administrador", () => {
     expect(rows[0]?.role).toBe("secretaria");
   });
 });
+
+describe("catalogo de treinamentos (supabase/catalog/treinamentos.sql)", () => {
+  const catalogSql = () => readFileSync(join(root, "catalog", "treinamentos.sql"), "utf8");
+
+  it("roda sobre o seed, e idempotente, respeita as constraints e preserva capa", async () => {
+    await db.exec("update public.courses set cover_path = 'nr-35-capa.webp' where slug = 'nr-35'");
+    await db.exec(catalogSql());
+    await db.exec(catalogSql());
+    const rows = await q<{ slug: string; category: string; workload_hours: number; validity_months: number | null; description: string; syllabus: string; active: boolean; cover_path: string | null }>(
+      "select slug, category, workload_hours, validity_months, description, syllabus, active, cover_path from public.courses where slug = any($1)",
+      [["nr-12", "nr-18", "nr-34", "nr-33", "nr-35", "nr-37", "movimentacao-de-cargas", "montador-de-andaime", "almoxarifado", "pintura-industrial-n1", "tecnicas-cozinheiro-offshore", "tecnicas-saloneiro-offshore", "tecnicas-taifeiro-offshore"]],
+    );
+    expect(rows).toHaveLength(13);
+    expect(rows.every((r) => r.active && r.description.length > 20 && r.description.length <= 1000 && !r.syllabus.includes("[PENDENTE"))).toBe(true);
+    expect(rows.some((r) => r.category === "parceria")).toBe(false);
+    const by = Object.fromEntries(rows.map((r) => [r.slug, r]));
+    expect(by["nr-35"]).toMatchObject({ workload_hours: 8, validity_months: 24, cover_path: "nr-35-capa.webp" });
+    expect(by["nr-37"]).toMatchObject({ workload_hours: 6, validity_months: 60 });
+    expect(by["pintura-industrial-n1"]?.workload_hours).toBe(200);
+    expect(by["tecnicas-saloneiro-offshore"]?.validity_months).toBeNull();
+  });
+});
