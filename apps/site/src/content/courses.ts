@@ -8,7 +8,13 @@ export interface SiteCourse {
   summary: string | null;
   /** Rotulo curto exibido no rodape do card. */
   tag: string;
+  /** Capa enviada no painel (URL publica). Ausente na lista estatica. */
+  coverUrl?: string | null;
+  workloadHours?: number;
+  modality?: "presencial" | "online" | "hibrido";
 }
+
+export const modalityLabel = { presencial: "Presencial", online: "Online", hibrido: "Híbrido" } as const;
 
 /* Os 10 cursos que emitem certificado. Mesmos slugs de supabase/seed.sql.
    Carga horaria e descricao so entram aqui depois de confirmadas pela Olimach. */

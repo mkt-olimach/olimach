@@ -35,6 +35,10 @@ const courseFields = {
     .nullable(),
   workload_hours: z.number({ invalid_type_error: "Informe a carga horaria" }).int("Use horas inteiras").positive("A carga horaria deve ser maior que zero"),
   syllabus: z.string(),
+  /** Texto de divulgacao exibido na landing. */
+  description: z.string().trim().max(1000, "Use no maximo 1000 caracteres").default(""),
+  /** Caminho da capa no bucket publico course-covers. */
+  cover_path: z.string().max(200).nullable().default(null),
   modality: courseModalitySchema,
   validity_months: z.number().int().positive("A validade deve ser maior que zero").nullable(),
   active: z.boolean(),
@@ -53,6 +57,19 @@ export const courseSchema = z
   .object({ id: uuid, ...courseFields })
   .refine(nrCodeMatchesCategory.check, { message: nrCodeMatchesCategory.message, path: ["nr_code"] });
 export type Course = z.infer<typeof courseSchema>;
+
+/** Linha devolvida por public.public_courses(): so campos de divulgacao de treinamentos ativos. */
+export const publicCourseSchema = z.object({
+  slug: z.string(),
+  name: z.string(),
+  category: courseCategorySchema,
+  nr_code: z.string().nullable(),
+  workload_hours: z.number(),
+  modality: courseModalitySchema,
+  description: z.string(),
+  cover_path: z.string().nullable(),
+});
+export type PublicCourse = z.infer<typeof publicCourseSchema>;
 
 /** Gera o slug a partir do nome (sem acentos, minusculas, hifens). */
 export function slugify(value: string): string {
