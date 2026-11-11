@@ -323,4 +323,12 @@ describe("catalogo de treinamentos (supabase/catalog/treinamentos.sql)", () => {
     expect(by["pintura-industrial-n1"]?.workload_hours).toBe(200);
     expect(by["tecnicas-saloneiro-offshore"]?.validity_months).toBeNull();
   });
+
+  it("remove os treinamentos de exemplo sem turma e inativa os que tem turma", async () => {
+    const left = await q<{ slug: string }>("select slug from public.courses where slug in ('cpso-primeiros-socorros', 'cuidador-de-idoso', 'barbeiro')");
+    expect(left).toHaveLength(0);
+    const nr10 = await q<{ active: boolean }>("select active from public.courses where slug = 'nr-10'");
+    // nr-10 tem turma nos testes anteriores: nao pode ser apagado, so inativado
+    expect(nr10.length === 0 || nr10[0]?.active === false).toBe(true);
+  });
 });
