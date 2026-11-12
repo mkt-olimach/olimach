@@ -25,6 +25,8 @@ export const publicCompanySchema = z.object({
   youtube: text,
   logo_path: z.string().nullable().default(null),
   favicon_path: z.string().nullable().default(null),
+  /** Cor de destaque do site (#rrggbb). null = laranja padrao. */
+  accent_color: z.string().regex(/^#[0-9a-fA-F]{6}$/).nullable().catch(null).default(null),
 });
 export type PublicCompany = z.infer<typeof publicCompanySchema>;
 
@@ -55,6 +57,8 @@ export interface CompanyView {
   youtube: string;
   logoUrl: string | null;
   faviconUrl: string | null;
+  /** Cor de destaque escolhida (#rrggbb) ou null para o laranja padrao. */
+  accentColor: string | null;
 }
 
 /** Padrao quando o White Label ainda nao foi configurado (mantem o comportamento original da instalacao). */
@@ -80,6 +84,7 @@ export const DEFAULT_COMPANY: PublicCompany = {
   youtube: "",
   logo_path: null,
   favicon_path: null,
+  accent_color: null,
 };
 
 /** WhatsApp para wa.me: so digitos; acrescenta 55 quando vier sem o codigo do pais (10 ou 11 digitos). */
@@ -122,5 +127,34 @@ export function buildCompanyView(row: PublicCompany | null, storageBase: string 
     youtube: c.youtube.trim(),
     logoUrl: file(c.logo_path),
     faviconUrl: file(c.favicon_path),
+    accentColor: c.accent_color ?? null,
   };
+}
+
+/** Laranja padrao da marca (token --orange-500). */
+export const DEFAULT_ACCENT = "#f28a1e";
+
+const hexToRgb = (hex: string): [number, number, number] => {
+  const n = Number.parseInt(hex.slice(1), 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+};
+const toHex = (rgb: number[]) => `#${rgb.map((v) => Math.round(Math.min(255, Math.max(0, v))).toString(16).padStart(2, "0")).join("")}`;
+
+/** Tons derivados da cor de destaque: o base (orange-500) e o escuro do hover (orange-600, ~15% mais escuro). */
+export function deriveAccent(hex: string): { base: string; dark: string; baseRgb: string; darkRgb: string } {
+  const base = /^#[0-9a-fA-F]{6}$/.test(hex) ? hex.toLowerCase() : DEFAULT_ACCENT;
+  const rgb = hexToRgb(base);
+  const darkParts = rgb.map((v) => v * 0.85);
+  return { base, dark: toHex(darkParts), baseRgb: rgb.join(" "), darkRgb: darkParts.map(Math.round).join(" ") };
+}
+
+/** Razao de contraste da cor com texto branco (WCAG). >= 3 e aceitavel para texto grande e botoes. */
+export function contrastWithWhite(hex: string): number {
+  const lin = (v: number) => {
+    const s = v / 255;
+    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+  };
+  const [r, g, b] = hexToRgb(hex);
+  const luminance = 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
+  return 1.05 / (luminance + 0.05);
 }

@@ -1,3 +1,4 @@
+import { DEFAULT_ACCENT, contrastWithWhite, deriveAccent } from "@olimach/schemas";
 import { Badge, Button } from "@olimach/ui";
 import { ImageUp, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -40,13 +41,14 @@ interface CompanyRow {
   logo_path: string | null;
   logo_gray_path: string | null;
   favicon_path: string | null;
+  accent_color: string | null;
 }
 
 const TEXT_FIELDS = ["company_name", "legal_name", "cnpj", "phone", "whatsapp", "email", "website", "business_hours", "address", "number", "complement", "neighborhood", "city", "state", "postal_code", "facebook", "instagram", "linkedin", "youtube"] as const;
 type TextField = (typeof TEXT_FIELDS)[number];
 type Values = Record<TextField, string>;
 
-const COLUMNS = [...TEXT_FIELDS, "logo_path", "logo_gray_path", "favicon_path"].join(", ");
+const COLUMNS = [...TEXT_FIELDS, "logo_path", "logo_gray_path", "favicon_path", "accent_color"].join(", ");
 const blank: Values = Object.fromEntries(TEXT_FIELDS.map((f) => [f, ""])) as Values;
 
 const LIMITS: Record<TextField, number> = {
@@ -179,6 +181,77 @@ function ImagePicker({
   );
 }
 
+/** Seletor de cor (color picker nativo + codigo hexadecimal) com previa e aviso de contraste. */
+function AccentPicker({ value, onChange }: { value: string | null; onChange: (next: string | null) => void }) {
+  const current = value ?? DEFAULT_ACCENT;
+  const [hex, setHex] = useState(current);
+  useEffect(() => setHex(current), [current]);
+  const tones = deriveAccent(current);
+  const contrast = contrastWithWhite(tones.base);
+  const valid = (v: string) => /^#[0-9a-fA-F]{6}$/.test(v);
+  return (
+    <div className="flex flex-wrap items-start gap-6">
+      <div className="space-y-3">
+        <div className="flex items-center gap-3">
+          <label htmlFor="accent-picker" className="sr-only">
+            Escolher cor de destaque
+          </label>
+          <input
+            id="accent-picker"
+            type="color"
+            value={current}
+            onChange={(e) => onChange(e.target.value.toLowerCase())}
+            className="h-12 w-16 cursor-pointer rounded-btn-admin border border-line bg-white p-1"
+          />
+          <Field label="Código da cor" error={hex && !valid(hex) ? "Use o formato #RRGGBB." : undefined} className="w-36">
+            {(p) => (
+              <input
+                {...p}
+                value={hex}
+                maxLength={7}
+                spellCheck={false}
+                autoComplete="off"
+                className={`${inputClass} font-mono uppercase`}
+                onChange={(e) => {
+                  const raw = e.target.value.trim();
+                  const next = raw.startsWith("#") ? raw : `#${raw}`;
+                  setHex(next);
+                  if (valid(next)) onChange(next.toLowerCase());
+                }}
+              />
+            )}
+          </Field>
+        </div>
+        <div className="flex items-center gap-3 text-xs">
+          <Button type="button" variant="secondary" onClick={() => onChange(null)} disabled={value === null}>
+            Restaurar laranja padrão
+          </Button>
+          {value === null && <span className="text-muted">Usando o padrão da marca.</span>}
+        </div>
+        {contrast < 3 && (
+          <p role="alert" className="max-w-sm rounded-btn-admin bg-warning/15 p-2.5 text-xs text-ink">
+            Cor muito clara: o texto branco dos botões pode ficar difícil de ler. Prefira um tom mais escuro.
+          </p>
+        )}
+      </div>
+      <div>
+        <p className="mb-1.5 text-xs font-semibold text-navy-900">Pré-visualização</p>
+        <div className="flex flex-wrap items-center gap-3 rounded-[12px] border border-line bg-white p-4">
+          <span className="rounded-full px-5 py-2.5 text-xs font-bold text-white" style={{ backgroundColor: tones.base }}>
+            Botão de destaque
+          </span>
+          <span className="rounded-full px-5 py-2.5 text-xs font-bold text-white" style={{ backgroundColor: tones.dark }}>
+            Ao passar o mouse
+          </span>
+          <span className="text-xs font-extrabold uppercase tracking-[0.15em]" style={{ color: tones.dark }}>
+            Detalhe
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /** Modulo White Label (so super_admin): marca e dados da empresa desta instalacao. */
 export function WhiteLabel() {
   const { profile, loading } = useAuth();
@@ -191,6 +264,7 @@ export function WhiteLabel() {
   const [faviconFile, setFaviconFile] = useState<File | null>(null);
   const [removeLogo, setRemoveLogo] = useState(false);
   const [removeFavicon, setRemoveFavicon] = useState(false);
+  const [accent, setAccent] = useState<string | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [cepStatus, setCepStatus] = useState<{ tone: "info" | "error"; text: string } | null>(null);
@@ -212,6 +286,7 @@ export function WhiteLabel() {
     setFaviconFile(null);
     setRemoveLogo(false);
     setRemoveFavicon(false);
+    setAccent(next?.accent_color ?? null);
     setLoaded(true);
   }, [toast]);
 
@@ -329,7 +404,7 @@ export function WhiteLabel() {
       faviconPath = path;
     }
 
-    const payload = { singleton: true, ...Object.fromEntries(TEXT_FIELDS.map((f) => [f, values[f].trim()])), logo_path: logoPath, logo_gray_path: logoGrayPath, favicon_path: faviconPath, updated_at: new Date().toISOString() };
+    const payload = { singleton: true, ...Object.fromEntries(TEXT_FIELDS.map((f) => [f, values[f].trim()])), logo_path: logoPath, logo_gray_path: logoGrayPath, favicon_path: faviconPath, accent_color: accent, updated_at: new Date().toISOString() };
     const { error } = await supabase.from("company_settings").upsert(payload);
     if (error) {
       if (uploaded.length) await supabase.storage.from(BUCKET).remove(uploaded);
@@ -399,6 +474,12 @@ export function WhiteLabel() {
                 }}
               />
             </div>
+          </section>
+
+          <section className="rounded-[15px] border border-line bg-surface p-5 shadow-sm">
+            <h2 className="mb-1 text-base text-navy-900">Cor de destaque</h2>
+            <p className="mb-4 text-xs text-muted">Substitui o laranja da marca em botões, selos e detalhes do site.</p>
+            <AccentPicker value={accent} onChange={setAccent} />
           </section>
 
           <section className="rounded-[15px] border border-line bg-surface p-5 shadow-sm">

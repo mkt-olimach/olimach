@@ -1,4 +1,4 @@
-import { DEFAULT_COMPANY, buildCompanyView, publicCompanySchema } from "@olimach/schemas";
+import { DEFAULT_COMPANY, buildCompanyView, deriveAccent, publicCompanySchema } from "@olimach/schemas";
 import type { CompanyView } from "@olimach/schemas";
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
@@ -23,9 +23,40 @@ async function fetchCompany(signal: AbortSignal): Promise<CompanyView | null> {
 }
 
 const DEFAULT_NAME = DEFAULT_COMPANY.company_name;
+const ACCENT_KEY = "olimach.accent";
+const ACCENT_VARS = ["--orange-500", "--orange-600", "--orange-500-rgb", "--orange-600-rgb"] as const;
+
+/** Troca o laranja da marca pelos tons da cor escolhida (todos os componentes leem estas variaveis). */
+function applyAccent(hex: string | null) {
+  const root = document.documentElement.style;
+  if (!hex) {
+    ACCENT_VARS.forEach((name) => root.removeProperty(name));
+    return;
+  }
+  const tones = deriveAccent(hex);
+  root.setProperty("--orange-500", tones.base);
+  root.setProperty("--orange-600", tones.dark);
+  root.setProperty("--orange-500-rgb", tones.baseRgb);
+  root.setProperty("--orange-600-rgb", tones.darkRgb);
+}
+
+// Aplica a ultima cor conhecida antes do primeiro desenho (evita piscar o laranja padrao).
+try {
+  const saved = localStorage.getItem(ACCENT_KEY);
+  if (saved && /^#[0-9a-fA-F]{6}$/.test(saved)) applyAccent(saved);
+} catch {
+  /* armazenamento indisponivel */
+}
 
 /** Aplica favicon, titulo e dados estruturados da empresa no <head>. */
 function applyHead(company: CompanyView) {
+  applyAccent(company.accentColor);
+  try {
+    if (company.accentColor) localStorage.setItem(ACCENT_KEY, company.accentColor);
+    else localStorage.removeItem(ACCENT_KEY);
+  } catch {
+    /* armazenamento indisponivel */
+  }
   if (company.faviconUrl) {
     let link = document.querySelector<HTMLLinkElement>('link[rel~="icon"]');
     if (!link) {
