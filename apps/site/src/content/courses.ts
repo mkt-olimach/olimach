@@ -11,6 +11,8 @@ export interface SiteCourse {
   /** Capa enviada no painel (URL publica). Ausente na lista estatica. */
   coverUrl?: string | null;
   workloadHours?: number;
+  theoryHours?: number;
+  practiceHours?: number;
   modality?: "presencial" | "online" | "hibrido";
 }
 

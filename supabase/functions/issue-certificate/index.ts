@@ -67,14 +67,14 @@ Deno.serve(async (request) => {
     return fail(422, "not_configured", "Configure SITE_URL, COMPANY_LEGAL_NAME e COMPANY_CNPJ nos segredos da função antes de emitir.");
   }
 
-  let body: { enrollment_id?: string; technical_lead_id?: string };
+  let body: { enrollment_id?: string };
   try {
     body = await request.json();
   } catch {
     return fail(400, "invalid_body", "Corpo da requisição inválido.");
   }
-  if (!body.enrollment_id || !UUID.test(body.enrollment_id) || !body.technical_lead_id || !UUID.test(body.technical_lead_id)) {
-    return fail(400, "invalid_body", "Informe a matrícula e o responsável técnico.");
+  if (!body.enrollment_id || !UUID.test(body.enrollment_id)) {
+    return fail(400, "invalid_body", "Informe a matrícula.");
   }
 
   const client = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, {
@@ -86,7 +86,7 @@ Deno.serve(async (request) => {
   const { data: enrollment, error: enrollmentError } = await client
     .from("enrollments")
     .select(
-      "id, attendance_ok, approved, student:students(full_name, cpf), class:classes(start_date, end_date, location, course:courses(name, category, workload_hours, syllabus, validity_months), class_instructors(instructor:instructors(name, qualification, registry, signature_path)))",
+      "id, attendance_ok, approved, student:students(full_name, cpf), class:classes(start_date, end_date, location, course:courses(name, category, workload_hours, theory_hours, practice_hours, syllabus, validity_months))",
     )
     .eq("id", body.enrollment_id)
     .maybeSingle();
@@ -101,8 +101,7 @@ Deno.serve(async (request) => {
       start_date: string;
       end_date: string;
       location: string;
-      course: { name: string; category: string; workload_hours: number; syllabus: string | null; validity_months: number | null } | null;
-      class_instructors: Array<{ instructor: Person | null }> | null;
+      course: { name: string; category: string; workload_hours: number; theory_hours: number; practice_hours: number; syllabus: string | null; validity_months: number | null } | null;
     } | null;
   };
   const student = row.student;
@@ -115,22 +114,27 @@ Deno.serve(async (request) => {
   const { data: existing } = await client.from("certificates").select("id").eq("enrollment_id", body.enrollment_id).eq("status", "valid").limit(1);
   if (existing && existing.length > 0) return fail(409, "already_issued", "Esta matrícula já tem um certificado válido. Revogue-o para reemitir.");
 
-  const { data: lead, error: leadError } = await client
-    .from("technical_leads")
-    .select("name, qualification, registry, signature_path")
-    .eq("id", body.technical_lead_id)
-    .maybeSingle();
-  if (leadError || !lead) return fail(404, "lead_not_found", "Responsável técnico não encontrado.");
+  // Assinaturas padrao (Configuracoes): engenheiro tecnico, diretoria e tecnico em seguranca.
+  const { data: signerRows, error: signerError } = await client.from("certificate_signers").select("role, name, qualification, registry, signature_path");
+  if (signerError) return fail(500, "signers_failed", "Não foi possível consultar as assinaturas padrão.");
+  const byRole = new Map((signerRows ?? []).map((r) => [r.role as string, r as Person]));
+  const ROLES: Array<[string, string]> = [
+    ["engineer", "Engenheiro técnico"],
+    ["director", "Diretoria"],
+    ["safety_technician", "Técnico em segurança"],
+  ];
+  const missing = ROLES.filter(([role]) => !byRole.has(role)).map(([, label]) => label);
+  if (missing.length > 0) {
+    return fail(422, "signers_missing", `Configure as assinaturas padrão em Configurações antes de emitir. Faltam: ${missing.join(", ")}.`);
+  }
+  const signers: Array<{ role: string; signer: Signer }> = [];
+  for (const [role, label] of ROLES) signers.push({ role: label, signer: await toSigner(client, byRole.get(role)!) });
 
   const { data: code, error: codeError } = await client.rpc("generate_certificate_code");
   if (codeError || typeof code !== "string") return fail(500, "code_failed", "Não foi possível gerar o código do certificado.");
 
   const issuedAt = new Date();
   const expiresAt = course.validity_months ? addMonths(issuedAt, course.validity_months) : null;
-  const instructors: Signer[] = [];
-  for (const link of klass.class_instructors ?? []) {
-    if (link.instructor) instructors.push(await toSigner(client, link.instructor));
-  }
 
   let pdf: Uint8Array;
   try {
@@ -140,14 +144,15 @@ Deno.serve(async (request) => {
       cpfMasked: maskCpf(student.cpf),
       courseName: course.name,
       workloadHours: course.workload_hours,
+      theoryHours: course.theory_hours,
+      practiceHours: course.practice_hours,
       startDate: klass.start_date,
       endDate: klass.end_date,
       location: klass.location,
       issuedAt,
       expiresAt,
       syllabus: course.syllabus ?? "",
-      instructors,
-      technicalLead: await toSigner(client, lead as Person),
+      signers,
       companyName,
       companyCnpj,
       validationUrl: `${siteUrl}/validar/${code}`,
@@ -167,7 +172,6 @@ Deno.serve(async (request) => {
       enrollment_id: body.enrollment_id,
       code,
       issued_at: issuedAt.toISOString(),
-      technical_lead_id: body.technical_lead_id,
       pdf_path: pdfPath,
       pdf_sha256: await sha256Hex(pdf),
     })

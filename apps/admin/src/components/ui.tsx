@@ -76,7 +76,7 @@ export function Modal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-navy-900/50 p-4 sm:items-center"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-navy-900/50 p-3 sm:p-4"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}
@@ -86,9 +86,9 @@ export function Modal({
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className={cn("my-6 w-full rounded-2xl bg-surface shadow-xl", wide ? "max-w-2xl" : "max-w-md")}
+        className={cn("flex max-h-[calc(100dvh-1.5rem)] w-full flex-col rounded-2xl bg-surface shadow-xl sm:max-h-[calc(100dvh-2rem)]", wide ? "max-w-2xl" : "max-w-md")}
       >
-        <div className="flex items-start justify-between gap-4 border-b border-line px-6 pb-4 pt-5">
+        <div className="flex shrink-0 items-start justify-between gap-4 border-b border-line px-6 pb-4 pt-5">
           <div>
             <h2 id={titleId} className="text-xl">
               {title}
@@ -99,7 +99,7 @@ export function Modal({
             <X size={18} aria-hidden />
           </button>
         </div>
-        <div className="px-6 pb-6 pt-5">{children}</div>
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 pb-6 pt-5">{children}</div>
       </div>
     </div>
   );

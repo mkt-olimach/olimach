@@ -1,4 +1,4 @@
-// Gerador do PDF do certificado (A4 paisagem, frente e verso). Sem dependencias de runtime alem de
+// Gerador do PDF do certificado (A4 retrato, frente e verso). Sem dependencias de runtime alem de
 // pdf-lib e qrcode (mapeadas em supabase/functions/deno.json para Deno e em package.json para os testes).
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import type { PDFFont, PDFPage } from "pdf-lib";
@@ -19,6 +19,8 @@ export interface CertificateData {
   cpfMasked: string;
   courseName: string;
   workloadHours: number;
+  theoryHours: number;
+  practiceHours: number;
   /** yyyy-mm-dd */
   startDate: string;
   endDate: string;
@@ -26,14 +28,14 @@ export interface CertificateData {
   issuedAt: Date;
   expiresAt: Date | null;
   syllabus: string;
-  instructors: Signer[];
-  technicalLead: Signer;
+  /** Engenheiro tecnico, diretoria e tecnico em seguranca (assinaturas padrao). Mais o campo em branco do aluno. */
+  signers: Array<{ role: string; signer: Signer }>;
   companyName: string;
   companyCnpj: string;
   validationUrl: string;
 }
 
-const PAGE: [number, number] = [841.89, 595.28]; // A4 paisagem
+const PAGE: [number, number] = [595.28, 841.89]; // A4 retrato
 const NAVY = rgb(0x0b / 255, 0x1f / 255, 0x4d / 255);
 const ORANGE = rgb(0xf2 / 255, 0x8a / 255, 0x1e / 255);
 const GRAY = rgb(0x6b / 255, 0x76 / 255, 0x89 / 255);
@@ -122,11 +124,11 @@ function drawQr(page: PDFPage, text: string, x: number, y: number, size: number)
   }
 }
 
-async function drawSigner(doc: PDFDocument, page: PDFPage, signer: Signer, centerX: number, baseY: number, bold: PDFFont, regular: PDFFont, role: string) {
-  const width = 170;
-  if (signer.signature) {
+async function drawSigner(doc: PDFDocument, page: PDFPage, signer: Signer | null, centerX: number, baseY: number, bold: PDFFont, regular: PDFFont, role: string) {
+  const width = 210;
+  if (signer?.signature) {
     const image = signer.signature.type === "png" ? await doc.embedPng(signer.signature.bytes) : await doc.embedJpg(signer.signature.bytes);
-    const scale = Math.min(120 / image.width, 44 / image.height);
+    const scale = Math.min(130 / image.width, 48 / image.height);
     page.drawImage(image, { x: centerX - (image.width * scale) / 2, y: baseY + 4, width: image.width * scale, height: image.height * scale });
   }
   page.drawLine({ start: { x: centerX - width / 2, y: baseY }, end: { x: centerX + width / 2, y: baseY }, thickness: 0.7, color: GRAY });
@@ -135,10 +137,15 @@ async function drawSigner(doc: PDFDocument, page: PDFPage, signer: Signer, cente
     const w = font.widthOfTextAtSize(clean, size);
     page.drawText(clean, { x: centerX - w / 2, y, size, font, color });
   };
+  if (!signer) return;
   draw(signer.name, baseY - 12, bold, fitSize(signer.name, bold, 10, width + 20, 8));
-  draw(signer.qualification, baseY - 23, regular, fitSize(signer.qualification, regular, 8, width + 20, 6.5), GRAY);
-  draw(signer.registry, baseY - 33, regular, fitSize(signer.registry, regular, 8, width + 20, 6.5), GRAY);
-  draw(role, baseY - 44, regular, 7, GRAY);
+  let ty = baseY - 23;
+  for (const line of [signer.qualification, signer.registry]) {
+    if (!line.trim()) continue;
+    draw(line, ty, regular, fitSize(line, regular, 8, width + 20, 6.5), GRAY);
+    ty -= 10;
+  }
+  draw(role, ty, bold, 7, NAVY);
 }
 
 export async function buildCertificatePdf(data: CertificateData): Promise<Uint8Array> {
@@ -156,62 +163,70 @@ export async function buildCertificatePdf(data: CertificateData): Promise<Uint8A
   drawFrame(front);
   const logoHeight = 84;
   const logoWidth = (logo.width / logo.height) * logoHeight;
-  front.drawImage(logo, { x: (PAGE[0] - logoWidth) / 2, y: PAGE[1] - 36 - logoHeight, width: logoWidth, height: logoHeight });
+  front.drawImage(logo, { x: (PAGE[0] - logoWidth) / 2, y: PAGE[1] - 40 - logoHeight, width: logoWidth, height: logoHeight });
 
-  drawCentered(front, "CERTIFICADO", PAGE[1] - 160, bold, 28, NAVY);
-  drawCentered(front, "Certificamos que", PAGE[1] - 188, regular, 11, GRAY);
-  const nameSize = fitSize(data.studentName, bold, 26, 680, 14);
-  drawCentered(front, data.studentName, PAGE[1] - 218, bold, nameSize, INK);
-  drawCentered(front, `CPF ${data.cpfMasked}`, PAGE[1] - 234, regular, 9, GRAY);
-  drawCentered(front, "concluiu com aproveitamento o treinamento de", PAGE[1] - 258, regular, 11, GRAY);
+  const textWidth = PAGE[0] - 2 * (MARGIN + 24);
+  drawCentered(front, "CERTIFICADO", PAGE[1] - 190, bold, 30, NAVY, 2);
+  drawCentered(front, "Certificamos que", PAGE[1] - 228, regular, 11, GRAY);
+  const nameSize = fitSize(data.studentName, bold, 24, textWidth, 13);
+  drawCentered(front, data.studentName, PAGE[1] - 260, bold, nameSize, INK);
+  drawCentered(front, `CPF ${data.cpfMasked}`, PAGE[1] - 277, regular, 9, GRAY);
+  drawCentered(front, "concluiu com aproveitamento o treinamento de", PAGE[1] - 306, regular, 11, GRAY);
 
-  const courseLines = wrapText(data.courseName, bold, 18, 680).slice(0, 2);
-  let y = PAGE[1] - 284;
+  const courseLines = wrapText(data.courseName, bold, 17, textWidth).slice(0, 3);
+  let y = PAGE[1] - 334;
   for (const line of courseLines) {
-    drawCentered(front, line, y, bold, fitSize(line, bold, 18, 680, 12), NAVY);
-    y -= 22;
+    drawCentered(front, line, y, bold, fitSize(line, bold, 17, textWidth, 11), NAVY);
+    y -= 21;
   }
   const period = data.startDate === data.endDate ? formatDay(data.startDate) : `${formatDay(data.startDate)} a ${formatDay(data.endDate)}`;
-  const detail = `com carga horária de ${data.workloadHours} horas, realizado em ${period}, em ${data.location}.`;
-  const detailLines = wrapText(detail, regular, 10.5, 680);
-  y -= 4;
+  const workload = `carga horária total de ${data.workloadHours} horas (${data.theoryHours} h teóricas e ${data.practiceHours} h práticas)`;
+  const detail = `com ${workload}, realizado em ${period}, em ${data.location}.`;
+  const detailLines = wrapText(detail, regular, 10.5, textWidth);
+  y -= 6;
   for (const line of detailLines) {
     drawCentered(front, line, y, regular, 10.5, INK);
-    y -= 14;
+    y -= 15;
   }
   const validity = data.expiresAt ? `Validade: ${formatDate(data.expiresAt)}` : "Certificado sem prazo de validade definido";
-  drawCentered(front, `Emitido em ${formatDate(data.issuedAt)}  |  ${validity}`, y - 4, regular, 9.5, GRAY);
+  drawCentered(front, `Emitido em ${formatDate(data.issuedAt)}  |  ${validity}`, y - 6, regular, 9.5, GRAY);
+
+  // Quatro campos de assinatura em grade 2x2: aluno (em branco, com o nome abaixo) e as tres padrao.
+  const leftX = PAGE[0] / 4 + 6;
+  const rightX = (PAGE[0] * 3) / 4 - 6;
+  const rowTop = 330;
+  const rowBottom = 215;
+  const student: Signer = { name: data.studentName, qualification: `CPF ${data.cpfMasked}`, registry: "", signature: null };
+  await drawSigner(doc, front, student, leftX, rowTop, bold, regular, "Aluno");
+  const standard = data.signers.slice(0, 3);
+  const spots: Array<[number, number]> = [
+    [rightX, rowTop],
+    [leftX, rowBottom],
+    [rightX, rowBottom],
+  ];
+  for (let i = 0; i < standard.length; i++) {
+    const item = standard[i];
+    const spot = spots[i];
+    if (item && spot) await drawSigner(doc, front, item.signer, spot[0], spot[1], bold, regular, item.role);
+  }
 
   // QR + codigo (canto inferior esquerdo)
   const qrSize = 66;
-  const qrX = MARGIN + 6;
-  const qrY = 74;
+  const qrX = MARGIN + 14;
+  const qrY = 70;
   drawQr(front, data.validationUrl, qrX, qrY, qrSize);
-  front.drawText("Código de validação", { x: qrX + qrSize + 8, y: qrY + 46, size: 7, font: regular, color: GRAY });
-  front.drawText(toWinAnsi(data.code), { x: qrX + qrSize + 8, y: qrY + 30, size: 14, font: bold, color: NAVY });
-  const urlLines = wrapText(data.validationUrl, regular, 6.5, 120);
-  urlLines.slice(0, 3).forEach((line, i) => front.drawText(line, { x: qrX + qrSize + 8, y: qrY + 18 - i * 8, size: 6.5, font: regular, color: GRAY }));
-
-  // Assinaturas: instrutores (ate 2) e responsavel tecnico
-  const signers: Array<{ signer: Signer; role: string }> = [
-    ...data.instructors.slice(0, 2).map((signer) => ({ signer, role: "Instrutor" })),
-    { signer: data.technicalLead, role: "Responsável técnico" },
-  ];
-  const left = qrX + qrSize + 140;
-  const right = PAGE[0] - MARGIN - 20;
-  const slot = (right - left) / signers.length;
-  for (let i = 0; i < signers.length; i++) {
-    const item = signers[i];
-    if (item) await drawSigner(doc, front, item.signer, left + slot * i + slot / 2, 92, bold, regular, item.role);
-  }
+  front.drawText("Código de validação", { x: qrX + qrSize + 10, y: qrY + 50, size: 7, font: regular, color: GRAY });
+  front.drawText(toWinAnsi(data.code), { x: qrX + qrSize + 10, y: qrY + 34, size: 14, font: bold, color: NAVY });
+  const urlLines = wrapText(data.validationUrl, regular, 6.5, 260);
+  urlLines.slice(0, 3).forEach((line, i) => front.drawText(line, { x: qrX + qrSize + 10, y: qrY + 22 - i * 8, size: 6.5, font: regular, color: GRAY }));
 
   drawCentered(front, toWinAnsi(`${data.companyName}  |  CNPJ ${data.companyCnpj}`), 28, regular, 8, GRAY);
 
   // ----------------------------------------------------------------- verso
   const bodySize = 10;
   const lineHeight = 14;
-  const textWidth = PAGE[0] - MARGIN * 2 - 40;
-  const lines = wrapText(data.syllabus.trim() || "Conteúdo programático não informado.", regular, bodySize, textWidth);
+  const backWidth = PAGE[0] - MARGIN * 2 - 40;
+  const lines = wrapText(data.syllabus.trim() || "Conteúdo programático não informado.", regular, bodySize, backWidth);
   let index = 0;
   let pageNumber = 0;
   while (index < lines.length || pageNumber === 0) {
@@ -219,7 +234,7 @@ export async function buildCertificatePdf(data: CertificateData): Promise<Uint8A
     pageNumber++;
     drawFrame(back);
     back.drawText("CONTEÚDO PROGRAMÁTICO", { x: MARGIN + 20, y: PAGE[1] - 66, size: 15, font: bold, color: NAVY });
-    back.drawText(toWinAnsi(wrapText(data.courseName, regular, 10, textWidth)[0] ?? ""), { x: MARGIN + 20, y: PAGE[1] - 84, size: 10, font: regular, color: GRAY });
+    back.drawText(toWinAnsi(wrapText(data.courseName, regular, 10, backWidth)[0] ?? ""), { x: MARGIN + 20, y: PAGE[1] - 84, size: 10, font: regular, color: GRAY });
     back.drawLine({ start: { x: MARGIN + 20, y: PAGE[1] - 94 }, end: { x: PAGE[0] - MARGIN - 20, y: PAGE[1] - 94 }, thickness: 0.7, color: ORANGE });
     let ty = PAGE[1] - 116;
     while (index < lines.length && ty > 70) {

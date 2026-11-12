@@ -7,6 +7,8 @@ const base = {
   category: "nr" as const,
   nr_code: "NR-35",
   workload_hours: 8,
+  theory_hours: 5,
+  practice_hours: 3,
   syllabus: "",
   modality: "presencial" as const,
   validity_months: 24,
@@ -18,6 +20,12 @@ describe("courseInputSchema", () => {
     expect(courseInputSchema.safeParse(base).success).toBe(true);
   });
 
+  it("exige que a carga total seja a soma da teorica e da pratica", () => {
+    expect(courseInputSchema.safeParse({ ...base, theory_hours: 6 }).success).toBe(false);
+    expect(courseInputSchema.safeParse({ ...base, theory_hours: 8, practice_hours: 0 }).success).toBe(true);
+    expect(courseInputSchema.safeParse({ ...base, theory_hours: -1, practice_hours: 9 }).success).toBe(false);
+  });
+
   it("exige codigo so para NR", () => {
     expect(courseInputSchema.safeParse({ ...base, nr_code: null }).success).toBe(false);
     expect(courseInputSchema.safeParse({ ...base, category: "profissionalizante" }).success).toBe(false);
@@ -25,7 +33,7 @@ describe("courseInputSchema", () => {
   });
 
   it("rejeita carga horaria zero e slug invalido", () => {
-    expect(courseInputSchema.safeParse({ ...base, workload_hours: 0 }).success).toBe(false);
+    expect(courseInputSchema.safeParse({ ...base, workload_hours: 0, theory_hours: 0, practice_hours: 0 }).success).toBe(false);
     expect(courseInputSchema.safeParse({ ...base, slug: "NR 35" }).success).toBe(false);
   });
 });

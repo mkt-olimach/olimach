@@ -16,6 +16,8 @@ interface CourseRow {
   category: CourseCategory;
   nr_code: string | null;
   workload_hours: number;
+  theory_hours: number;
+  practice_hours: number;
   syllabus: string;
   description: string;
   cover_path: string | null;
@@ -39,14 +41,15 @@ const categoryLabel: Record<CourseCategory, string> = {
   parceria: "Parceria",
 };
 const modalityLabel = { presencial: "Presencial", online: "Online", hibrido: "Híbrido" } as const;
-const COLUMNS = "id, slug, name, category, nr_code, workload_hours, syllabus, description, cover_path, modality, validity_months, active";
+const COLUMNS = "id, slug, name, category, nr_code, workload_hours, theory_hours, practice_hours, syllabus, description, cover_path, modality, validity_months, active";
 
 interface FormState {
   name: string;
   slug: string;
   category: CourseCategory;
   nr_code: string;
-  workload_hours: string;
+  theory_hours: string;
+  practice_hours: string;
   modality: CourseRow["modality"];
   validity_months: string;
   syllabus: string;
@@ -59,7 +62,8 @@ const blank: FormState = {
   slug: "",
   category: "nr",
   nr_code: "",
-  workload_hours: "",
+  theory_hours: "",
+  practice_hours: "",
   modality: "presencial",
   validity_months: "",
   syllabus: "",
@@ -72,7 +76,8 @@ const fromRow = (c: CourseRow): FormState => ({
   slug: c.slug,
   category: c.category,
   nr_code: c.nr_code ?? "",
-  workload_hours: String(c.workload_hours),
+  theory_hours: String(c.theory_hours),
+  practice_hours: String(c.practice_hours),
   modality: c.modality,
   validity_months: c.validity_months != null ? String(c.validity_months) : "",
   syllabus: c.syllabus,
@@ -121,6 +126,10 @@ function CourseForm({
 
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) => setValues((v) => ({ ...v, [key]: value }));
 
+  const theoryHours = values.theory_hours === "" ? Number.NaN : Number(values.theory_hours);
+  const practiceHours = values.practice_hours === "" ? Number.NaN : Number(values.practice_hours);
+  const totalHours = Number.isFinite(theoryHours) && Number.isFinite(practiceHours) ? theoryHours + practiceHours : Number.NaN;
+
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
     if (!supabase) return;
@@ -129,7 +138,9 @@ function CourseForm({
       name: values.name,
       category: values.category,
       nr_code: values.category === "nr" ? values.nr_code.trim().toUpperCase() || null : null,
-      workload_hours: values.workload_hours === "" ? Number.NaN : Number(values.workload_hours),
+      workload_hours: totalHours,
+      theory_hours: theoryHours,
+      practice_hours: practiceHours,
       syllabus: values.syllabus,
       description: values.description,
       modality: values.modality,
@@ -239,10 +250,18 @@ function CourseForm({
         )}
 
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Carga horária (horas)" error={errors.workload_hours} hint="Confirme com a Olimach antes de publicar.">
+          <Field label="Carga horária teórica (horas)" error={errors.theory_hours}>
             {(p) => (
-              <input {...p} type="number" min={1} step={1} inputMode="numeric" className={inputClass} value={values.workload_hours} onChange={(e) => set("workload_hours", e.target.value)} />
+              <input {...p} type="number" min={0} step={1} inputMode="numeric" className={inputClass} value={values.theory_hours} onChange={(e) => set("theory_hours", e.target.value)} />
             )}
+          </Field>
+          <Field label="Carga horária prática (horas)" error={errors.practice_hours}>
+            {(p) => (
+              <input {...p} type="number" min={0} step={1} inputMode="numeric" className={inputClass} value={values.practice_hours} onChange={(e) => set("practice_hours", e.target.value)} />
+            )}
+          </Field>
+          <Field label="Carga horária (horas)" error={errors.workload_hours} hint="Soma automática da teórica e da prática. Confirme com a Olimach antes de publicar.">
+            {(p) => <input {...p} type="number" readOnly tabIndex={-1} className={`${inputClass} bg-canvas`} value={Number.isNaN(totalHours) ? "" : totalHours} />}
           </Field>
           <Field label="Validade do certificado (meses)" error={errors.validity_months} hint="Deixe vazio para certificado sem validade.">
             {(p) => (
@@ -482,7 +501,10 @@ export function Courses() {
                   <td className="px-2.5 py-3">
                     <Badge tone={c.category === "parceria" ? "warning" : "neutral"}>{categoryLabel[c.category]}</Badge>
                   </td>
-                  <td className="whitespace-nowrap px-2.5 py-3">{c.workload_hours} h</td>
+                  <td className="whitespace-nowrap px-2.5 py-3">
+                    {c.workload_hours} h
+                    <span className="block text-[11px] text-muted">{c.theory_hours} h teórica · {c.practice_hours} h prática</span>
+                  </td>
                   <td className="px-2.5 py-3">{modalityLabel[c.modality]}</td>
                   <td className="whitespace-nowrap px-2.5 py-3">{c.validity_months ? `${c.validity_months} meses` : "Sem validade"}</td>
                   <td className="px-2.5 py-3">

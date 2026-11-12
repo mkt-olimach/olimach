@@ -306,6 +306,9 @@ export function Home() {
                     <span>
                       {modalityLabel[course.modality]}
                       {course.workloadHours ? ` · ${course.workloadHours} h` : ""}
+                      {course.workloadHours && course.theoryHours != null && course.practiceHours != null
+                        ? ` (${course.theoryHours} h teóricas + ${course.practiceHours} h práticas)`
+                        : ""}
                     </span>
                   ) : (
                     <Pending>modalidade</Pending>

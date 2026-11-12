@@ -33,6 +33,7 @@ const entityLabel: Record<string, string> = {
   enrollments: "Matrícula",
   instructors: "Instrutor",
   technical_leads: "Responsável técnico",
+  certificate_signers: "Assinatura do certificado",
   profiles: "Usuário",
 };
 

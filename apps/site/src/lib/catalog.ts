@@ -38,6 +38,8 @@ export async function fetchCatalog(signal?: AbortSignal): Promise<SiteCourse[] |
       tag: tagFor(c),
       coverUrl: coverUrl(c.cover_path),
       workloadHours: c.workload_hours,
+      theoryHours: c.theory_hours,
+      practiceHours: c.practice_hours,
       modality: c.modality,
     }));
 }

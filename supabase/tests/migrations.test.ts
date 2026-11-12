@@ -223,6 +223,20 @@ describe("RLS", () => {
     }
   });
 
+  it("carga horaria total e a soma da teorica e da pratica; a vitrine devolve a divisao", async () => {
+    await q("insert into public.courses (slug, name, category, workload_hours, theory_hours, practice_hours) values ('split-ok', 'Split Ok', 'profissionalizante', 10, 6, 4)");
+    await q("insert into public.courses (slug, name, category, workload_hours) values ('split-legado', 'Split Legado', 'profissionalizante', 7)");
+    await expect(
+      db.query("insert into public.courses (slug, name, category, workload_hours, theory_hours, practice_hours) values ('split-ruim', 'Split Ruim', 'profissionalizante', 10, 6, 3)"),
+    ).rejects.toThrow(/courses_workload_is_sum/);
+    const rows = await as("anon", null, () =>
+      q<{ slug: string; workload_hours: number; theory_hours: number; practice_hours: number }>("select slug, workload_hours, theory_hours, practice_hours from public.public_courses() where slug like 'split-%'"),
+    );
+    const by = Object.fromEntries(rows.map((r) => [r.slug, r]));
+    expect(by["split-ok"]).toMatchObject({ workload_hours: 10, theory_hours: 6, practice_hours: 4 });
+    expect(by["split-legado"]).toMatchObject({ workload_hours: 7, theory_hours: 7, practice_hours: 0 });
+  });
+
   it("bucket de capas e publico; os demais continuam privados", async () => {
     const rows = await q<{ id: string; public: boolean }>("select id, public from storage.buckets order by id");
     expect(Object.fromEntries(rows.map((r) => [r.id, r.public]))).toEqual({ certificates: false, "course-covers": true, signatures: false });
