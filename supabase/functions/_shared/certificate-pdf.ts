@@ -127,32 +127,30 @@ function drawQr(page: PDFPage, text: string, x: number, y: number, size: number)
   }
 }
 
-/** Campo de assinatura: textos (nome, qualificacao, registro, funcao) acima, imagem sobre a linha. */
+/** Campo de assinatura (igual a pre-visualizacao do painel): imagem sobre a linha; nome, qualificacao, registro e funcao abaixo. */
 async function drawSigner(doc: PDFDocument, page: PDFPage, signer: Signer | null, centerX: number, lineY: number, bold: PDFFont, regular: PDFFont, role: string) {
   const width = 215;
   const draw = (text: string, y: number, font: PDFFont, size: number, color = INK) => {
     const clean = toWinAnsi(text);
     page.drawText(clean, { x: centerX - font.widthOfTextAtSize(clean, size) / 2, y, size, font, color });
   };
-  const texts: Array<{ text: string; font: PDFFont; size: number; color?: typeof INK }> = [];
-  if (signer) {
-    texts.push({ text: signer.name, font: bold, size: fitSize(signer.name, bold, 9.5, width + 30, 7.5) });
-    for (const line of [signer.qualification, signer.registry]) {
-      if (line.trim()) texts.push({ text: line, font: regular, size: fitSize(line, regular, 8, width + 30, 6.5), color: GRAY });
-    }
-  }
-  texts.push({ text: role, font: bold, size: 7.5, color: NAVY });
-  let ty = lineY + 50 + 10 * (texts.length - 1);
-  for (const t of texts) {
-    draw(t.text, ty, t.font, t.size, t.color);
-    ty -= 10;
-  }
   if (signer?.signature) {
     const image = signer.signature.type === "png" ? await doc.embedPng(signer.signature.bytes) : await doc.embedJpg(signer.signature.bytes);
-    const scale = Math.min(180 / image.width, 46 / image.height);
-    page.drawImage(image, { x: centerX - (image.width * scale) / 2, y: lineY + 1, width: image.width * scale, height: image.height * scale });
+    const scale = Math.min(190 / image.width, 46 / image.height);
+    page.drawImage(image, { x: centerX - (image.width * scale) / 2, y: lineY + 4, width: image.width * scale, height: image.height * scale });
   }
   page.drawLine({ start: { x: centerX - width / 2, y: lineY }, end: { x: centerX + width / 2, y: lineY }, thickness: 0.7, color: GRAY });
+  let ty = lineY - 13;
+  if (signer) {
+    draw(signer.name, ty, bold, fitSize(signer.name, bold, 9.5, width + 30, 7.5));
+    ty -= 11;
+    for (const line of [signer.qualification, signer.registry]) {
+      if (!line.trim()) continue;
+      draw(line, ty, regular, fitSize(line, regular, 8, width + 30, 6.5), GRAY);
+      ty -= 10;
+    }
+  }
+  draw(role.toUpperCase(), ty - 1, bold, 7, NAVY);
 }
 
 export async function buildCertificatePdf(data: CertificateData): Promise<Uint8Array> {
@@ -213,7 +211,7 @@ export async function buildCertificatePdf(data: CertificateData): Promise<Uint8A
   const refLines = refText ? wrapText(refText, regular, 8, textWidth) : [];
   // bloco de carga horaria, referencia tecnica e datas (altura) + margem acima da grade de assinaturas
   const infoHeight = 14 + (refLines.length ? refLines.length * 10 + 8 : 0) + 26 + 14 + 10;
-  const frontFloor = 318 + infoHeight;
+  const frontFloor = 320 + infoHeight;
   front.drawText("CONTEÚDO:", { x: left, y, size: 9, font: bold, color: INK });
   y -= 14;
   let index = 0;
@@ -258,8 +256,8 @@ export async function buildCertificatePdf(data: CertificateData): Promise<Uint8A
   // Assinaturas em grade 2x2 (ordem do modelo): diretoria, engenheiro tecnico, tecnico em seguranca e aluno
   const leftX = PAGE[0] / 4 + 6;
   const rightX = (PAGE[0] * 3) / 4 - 6;
-  const rowTop = 222;
-  const rowBottom = 112;
+  const rowTop = 252;
+  const rowBottom = 132;
   const byOrder = [data.signers[1], data.signers[0], data.signers[2]];
   const spots: Array<[number, number]> = [
     [leftX, rowTop],
@@ -271,10 +269,8 @@ export async function buildCertificatePdf(data: CertificateData): Promise<Uint8A
     const spot = spots[i];
     if (item && spot) await drawSigner(doc, front, item.signer, spot[0], spot[1], bold, regular, item.role);
   }
-  await drawSigner(doc, front, null, rightX, rowBottom, bold, regular, "Assinatura do Aluno");
-  const studentLine = toWinAnsi(data.studentName);
-  const studentSize = fitSize(studentLine, regular, 8, 230, 6.5);
-  front.drawText(studentLine, { x: rightX - regular.widthOfTextAtSize(studentLine, studentSize) / 2, y: rowBottom - 11, size: studentSize, font: regular, color: GRAY });
+  const student: Signer = { name: data.studentName, qualification: `CPF ${data.cpfMasked}`, registry: "", signature: null };
+  await drawSigner(doc, front, student, rightX, rowBottom, bold, regular, "Assinatura do aluno");
 
   front.drawLine({ start: { x: left - 14, y: 64 }, end: { x: right + 14, y: 64 }, thickness: 0.6, color: GRAY });
   drawCentered(front, toWinAnsi(`${data.companyName}  |  CNPJ ${data.companyCnpj}`), 50, regular, 8, GRAY);
