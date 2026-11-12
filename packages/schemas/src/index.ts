@@ -74,8 +74,9 @@ export const publicCourseSchema = z.object({
   category: courseCategorySchema,
   nr_code: z.string().nullable(),
   workload_hours: z.number(),
-  theory_hours: z.number(),
-  practice_hours: z.number(),
+  // opcionais: o RPC antigo (antes da migracao de carga horaria) nao devolve a divisao
+  theory_hours: z.number().optional(),
+  practice_hours: z.number().optional(),
   modality: courseModalitySchema,
   description: z.string(),
   cover_path: z.string().nullable(),
