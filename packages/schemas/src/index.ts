@@ -194,3 +194,14 @@ export const emailSchema = z.string().trim().email("Informe um e-mail válido.")
 
 export { DEFAULT_COMPANY, buildCompanyView, publicCompanySchema, whatsappDigits } from "./company";
 export type { CompanyView, PublicCompany } from "./company";
+
+/** Linha devolvida por public.public_gallery(): imagem da galeria do site. */
+export const publicGalleryRowSchema = z.object({
+  id: z.string(),
+  path: z.string(),
+  title: z.string().default(""),
+  description: z.string().default(""),
+  width: z.number(),
+  height: z.number(),
+});
+export type PublicGalleryRow = z.infer<typeof publicGalleryRowSchema>;

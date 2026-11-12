@@ -5,6 +5,7 @@ import {
   CalendarDays,
   ChartNoAxesColumn,
   FileText,
+  Images,
   Home,
   LogOut,
   Menu,
@@ -30,6 +31,7 @@ const nav: Array<{ to: string; label: string; icon: LucideIcon; end?: boolean }>
   { to: "/turmas", label: "Turmas", icon: CalendarDays },
   { to: "/certificados", label: "Certificados", icon: FileText },
   { to: "/instrutores", label: "Instrutores", icon: UserCog },
+  { to: "/galeria", label: "Galeria", icon: Images },
   { to: "/relatorios", label: "Relatórios", icon: ChartNoAxesColumn },
   { to: "/configuracoes", label: "Configurações", icon: Settings2 },
 ];

@@ -266,9 +266,24 @@ describe("RLS", () => {
     await db.exec(`delete from public.profiles where id = '${SUPER}'; delete from public.company_settings;`);
   });
 
+  it("galeria: so admin escreve, equipe le e o site le so pela vitrine publica", async () => {
+    const insert = "insert into public.gallery_images (path, title, width, height) values ('a.webp', 'Foto A', 800, 600), ('b.webp', 'Foto B', 600, 900)";
+    await expect(as("authenticated", SECRETARIA, () => db.query(insert))).rejects.toThrow(/row-level security/);
+    await as("authenticated", ADMIN, () => db.query(insert));
+    expect(await as("authenticated", SECRETARIA, () => q("select 1 from public.gallery_images"))).toHaveLength(2);
+    expect(await as("anon", null, () => q("select 1 from public.gallery_images").catch(() => "negado"))).toBe("negado");
+    const pub = await as("anon", null, () => q<{ path: string; width: number; height: number }>("select path, width, height from public.public_gallery()"));
+    expect(pub.map((r) => r.path).sort()).toEqual(["a.webp", "b.webp"]);
+    await expect(as("authenticated", ADMIN, () => db.query("insert into public.gallery_images (path, width, height) values ('c.webp', 0, 10)"))).rejects.toThrow(/check/);
+    // exclusao em massa pelo admin; secretaria nao exclui nada (a RLS filtra)
+    expect(await as("authenticated", SECRETARIA, () => q("delete from public.gallery_images returning id"))).toHaveLength(0);
+    expect(await as("authenticated", ADMIN, () => q("delete from public.gallery_images where path in ('a.webp', 'b.webp') returning id"))).toHaveLength(2);
+    expect(await q("select 1 from public.gallery_images")).toHaveLength(0);
+  });
+
   it("bucket de capas e publico; os demais continuam privados", async () => {
     const rows = await q<{ id: string; public: boolean }>("select id, public from storage.buckets order by id");
-    expect(Object.fromEntries(rows.map((r) => [r.id, r.public]))).toEqual({ branding: true, certificates: false, "course-covers": true, signatures: false });
+    expect(Object.fromEntries(rows.map((r) => [r.id, r.public]))).toEqual({ branding: true, certificates: false, "course-covers": true, gallery: true, signatures: false });
   });
 
   it("secretaria opera alunos mas nao revoga, nao edita catalogo e nao le auditoria", async () => {
