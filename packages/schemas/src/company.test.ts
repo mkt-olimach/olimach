@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_COMPANY, buildCompanyView, publicCompanySchema, whatsappDigits } from "./company";
+import { DEFAULT_ACCENT, DEFAULT_COMPANY, buildCompanyView, contrastWithWhite, deriveAccent, publicCompanySchema, whatsappDigits } from "./company";
 
 describe("whatsappDigits", () => {
   it("acrescenta 55 e aceita numero com mascara", () => {
@@ -46,5 +46,32 @@ describe("buildCompanyView", () => {
     const v = buildCompanyView({ ...DEFAULT_COMPANY, address: "Av. Brasil", number: "", neighborhood: "", city: "", state: "" }, null);
     expect(v.addressLine).toBe("Av. Brasil");
     expect(v.fullAddress).toBe("Av. Brasil");
+  });
+});
+
+describe("cor de destaque", () => {
+  it("deriva o tom escuro e os canais RGB", () => {
+    const a = deriveAccent("#F28A1E");
+    expect(a.base).toBe("#f28a1e");
+    expect(a.baseRgb).toBe("242 138 30");
+    expect(a.darkRgb).toBe("206 117 26");
+    expect(a.dark).toBe("#ce751a");
+  });
+
+  it("cor invalida cai no laranja padrao", () => {
+    expect(deriveAccent("laranja").base).toBe(DEFAULT_ACCENT);
+  });
+
+  it("mede o contraste com texto branco", () => {
+    expect(contrastWithWhite("#000000")).toBeGreaterThan(20);
+    expect(contrastWithWhite("#ffffff")).toBeCloseTo(1, 1);
+    expect(contrastWithWhite("#fde047")).toBeLessThan(3);
+    expect(contrastWithWhite("#1e63c7")).toBeGreaterThan(3);
+  });
+
+  it("view traz a cor escolhida; valor invalido vira null", () => {
+    expect(buildCompanyView(publicCompanySchema.parse({ company_name: "X", accent_color: "#112233" }), null).accentColor).toBe("#112233");
+    expect(buildCompanyView(publicCompanySchema.parse({ company_name: "X", accent_color: "azul" }), null).accentColor).toBeNull();
+    expect(buildCompanyView(null, null).accentColor).toBeNull();
   });
 });
