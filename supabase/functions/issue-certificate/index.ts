@@ -86,7 +86,7 @@ Deno.serve(async (request) => {
   const { data: enrollment, error: enrollmentError } = await client
     .from("enrollments")
     .select(
-      "id, attendance_ok, approved, student:students(full_name, cpf), class:classes(start_date, end_date, location, course:courses(name, category, workload_hours, theory_hours, practice_hours, syllabus, validity_months))",
+      "id, attendance_ok, approved, student:students(full_name, cpf), class:classes(start_date, end_date, location, course:courses(name, category, workload_hours, theory_hours, practice_hours, technical_reference, syllabus, validity_months))",
     )
     .eq("id", body.enrollment_id)
     .maybeSingle();
@@ -101,7 +101,7 @@ Deno.serve(async (request) => {
       start_date: string;
       end_date: string;
       location: string;
-      course: { name: string; category: string; workload_hours: number; theory_hours: number; practice_hours: number; syllabus: string | null; validity_months: number | null } | null;
+      course: { name: string; category: string; workload_hours: number; theory_hours: number; practice_hours: number; technical_reference: string | null; syllabus: string | null; validity_months: number | null } | null;
     } | null;
   };
   const student = row.student;
@@ -146,6 +146,7 @@ Deno.serve(async (request) => {
       workloadHours: course.workload_hours,
       theoryHours: course.theory_hours,
       practiceHours: course.practice_hours,
+      technicalReference: course.technical_reference ?? "",
       startDate: klass.start_date,
       endDate: klass.end_date,
       location: klass.location,

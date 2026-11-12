@@ -336,6 +336,16 @@ describe("catalogo de treinamentos (supabase/catalog/treinamentos.sql)", () => {
     expect(by["nr-37"]).toMatchObject({ workload_hours: 6, validity_months: 60 });
     expect(by["pintura-industrial-n1"]?.workload_hours).toBe(200);
     expect(by["tecnicas-saloneiro-offshore"]?.validity_months).toBeNull();
+    const split = await q<{ slug: string; theory_hours: number; practice_hours: number; workload_hours: number; technical_reference: string }>(
+      "select slug, theory_hours, practice_hours, workload_hours, technical_reference from public.courses where active and slug in ('nr-12', 'nr-37', 'pintura-industrial-n1', 'movimentacao-de-cargas', 'nr-35')",
+    );
+    const sp = Object.fromEntries(split.map((r) => [r.slug, r]));
+    expect(sp["nr-12"]).toMatchObject({ theory_hours: 6, practice_hours: 2, technical_reference: "NR 06; NR 10; NR 12 e NR 34" });
+    expect(sp["nr-37"]).toMatchObject({ theory_hours: 6, practice_hours: 0 });
+    expect(sp["pintura-industrial-n1"]).toMatchObject({ theory_hours: 160, practice_hours: 40 });
+    expect(sp["movimentacao-de-cargas"]).toMatchObject({ theory_hours: 36, practice_hours: 4 });
+    expect(sp["nr-35"]?.technical_reference).toBe("NR 06, NR 18, NR 34, NR 35");
+    expect(split.every((r) => r.theory_hours + r.practice_hours === r.workload_hours)).toBe(true);
   });
 
   it("remove os treinamentos de exemplo sem turma e inativa os que tem turma", async () => {

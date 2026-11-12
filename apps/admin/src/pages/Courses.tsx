@@ -19,6 +19,7 @@ interface CourseRow {
   theory_hours: number;
   practice_hours: number;
   syllabus: string;
+  technical_reference: string;
   description: string;
   cover_path: string | null;
   modality: "presencial" | "online" | "hibrido";
@@ -41,7 +42,7 @@ const categoryLabel: Record<CourseCategory, string> = {
   parceria: "Parceria",
 };
 const modalityLabel = { presencial: "Presencial", online: "Online", hibrido: "Híbrido" } as const;
-const COLUMNS = "id, slug, name, category, nr_code, workload_hours, theory_hours, practice_hours, syllabus, description, cover_path, modality, validity_months, active";
+const COLUMNS = "id, slug, name, category, nr_code, workload_hours, theory_hours, practice_hours, syllabus, technical_reference, description, cover_path, modality, validity_months, active";
 
 interface FormState {
   name: string;
@@ -53,6 +54,7 @@ interface FormState {
   modality: CourseRow["modality"];
   validity_months: string;
   syllabus: string;
+  technical_reference: string;
   description: string;
   active: boolean;
 }
@@ -67,6 +69,7 @@ const blank: FormState = {
   modality: "presencial",
   validity_months: "",
   syllabus: "",
+  technical_reference: "",
   description: "",
   active: true,
 };
@@ -81,6 +84,7 @@ const fromRow = (c: CourseRow): FormState => ({
   modality: c.modality,
   validity_months: c.validity_months != null ? String(c.validity_months) : "",
   syllabus: c.syllabus,
+  technical_reference: c.technical_reference,
   description: c.description,
   active: c.active,
 });
@@ -142,6 +146,7 @@ function CourseForm({
       theory_hours: theoryHours,
       practice_hours: practiceHours,
       syllabus: values.syllabus,
+      technical_reference: values.technical_reference,
       description: values.description,
       modality: values.modality,
       validity_months: values.validity_months === "" ? null : Number(values.validity_months),
@@ -341,8 +346,11 @@ function CourseForm({
           )}
         </Field>
 
-        <Field label="Conteúdo programático" error={errors.syllabus} hint="Impresso no verso do certificado.">
+        <Field label="Conteúdo programático" error={errors.syllabus} hint="Impresso na frente do certificado; se não couber, continua na segunda página.">
           {(p) => <textarea {...p} rows={6} className={cn(inputClass, "resize-y")} value={values.syllabus} onChange={(e) => set("syllabus", e.target.value)} />}
+        </Field>
+        <Field label="Referência técnica" error={errors.technical_reference} hint={`Normas e padrões em que o treinamento se baseia (ex.: NR 06, NR 18, NR 35). ${values.technical_reference.length}/1000 caracteres.`}>
+          {(p) => <textarea {...p} rows={3} maxLength={1000} className={cn(inputClass, "resize-y")} value={values.technical_reference} onChange={(e) => set("technical_reference", e.target.value)} />}
         </Field>
 
         <label className="flex items-center gap-2.5 text-sm text-ink">
