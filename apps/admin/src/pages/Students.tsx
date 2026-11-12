@@ -4,7 +4,7 @@ import { Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { ConfirmDialog, Field, Modal, PageHeader, Pager, dbErrorMessage, inputClass, useDebouncedValue } from "../components/ui";
-import { useAuth } from "../lib/auth";
+import { isAdminRole, useAuth } from "../lib/auth";
 import { initials } from "../lib/certificates";
 import { supabase } from "../lib/supabase";
 import { useToast } from "../lib/toast";
@@ -132,7 +132,7 @@ function StudentForm({ student, onSaved, onClose }: { student: StudentRow | null
 export function Students() {
   const { profile } = useAuth();
   const toast = useToast();
-  const isAdmin = profile?.role === "admin";
+  const isAdmin = isAdminRole(profile?.role);
   const [rows, setRows] = useState<StudentRow[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);

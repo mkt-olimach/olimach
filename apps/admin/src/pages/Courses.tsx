@@ -5,7 +5,7 @@ import { ImagePlus, Pencil, Plus, Power, Search, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { ConfirmDialog, Field, Modal, PageHeader, dbErrorMessage, inputClass } from "../components/ui";
-import { useAuth } from "../lib/auth";
+import { isAdminRole, useAuth } from "../lib/auth";
 import { supabase } from "../lib/supabase";
 import { useToast } from "../lib/toast";
 
@@ -376,7 +376,7 @@ type Filter = "all" | CourseCategory;
 export function Courses() {
   const { profile } = useAuth();
   const toast = useToast();
-  const isAdmin = profile?.role === "admin";
+  const isAdmin = isAdminRole(profile?.role);
   const [rows, setRows] = useState<CourseRow[]>([]);
   const [loading, setLoading] = useState(Boolean(supabase));
   const [error, setError] = useState(false);

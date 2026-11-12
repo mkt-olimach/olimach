@@ -168,7 +168,7 @@ export const revokeCertificateSchema = z.object({
   reason: z.string().trim().min(5, "Descreva o motivo da revogacao"),
 });
 
-export const profileRoleSchema = z.enum(["admin", "secretaria"]);
+export const profileRoleSchema = z.enum(["super_admin", "admin", "secretaria"]);
 
 /* Linha devolvida pelo RPC public.validate_certificate. */
 export const publicValidationRowSchema = z.object({

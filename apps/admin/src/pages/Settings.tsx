@@ -5,13 +5,13 @@ import { AccountTab } from "../components/settings/AccountTab";
 import { SignersTab } from "../components/settings/SignersTab";
 import { TeamTab } from "../components/settings/TeamTab";
 import { PageHeader } from "../components/ui";
-import { useAuth } from "../lib/auth";
+import { isAdminRole, useAuth } from "../lib/auth";
 
 type Tab = "account" | "signers" | "team" | "activity";
 
 export function Settings() {
   const { profile } = useAuth();
-  const isAdmin = profile?.role === "admin";
+  const isAdmin = isAdminRole(profile?.role);
   const [tab, setTab] = useState<Tab>("account");
   const tabs: Array<{ id: Tab; label: string }> = [
     { id: "account", label: "Minha conta" },

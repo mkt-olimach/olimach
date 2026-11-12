@@ -3,13 +3,13 @@ import { Badge, Button } from "@olimach/ui";
 import { UserPlus } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import type { FormEvent } from "react";
-import { useAuth } from "../../lib/auth";
+import { roleLabel, useAuth } from "../../lib/auth";
 import { functionErrorMessage } from "../../lib/functions";
 import { supabase } from "../../lib/supabase";
 import { useToast } from "../../lib/toast";
 import { Field, Modal, dbErrorMessage, inputClass } from "../ui";
 
-type Role = "admin" | "secretaria";
+type Role = "super_admin" | "admin" | "secretaria";
 interface Member {
   id: string;
   name: string;
@@ -17,7 +17,7 @@ interface Member {
   active: boolean;
 }
 
-const roleLabel: Record<Role, string> = { admin: "Administrador", secretaria: "Secretaria" };
+
 
 function InviteDialog({ onDone, onClose }: { onDone: () => void; onClose: () => void }) {
   const toast = useToast();
@@ -133,7 +133,7 @@ export function TeamTab() {
                     {m.name} {self && <span className="ml-1 text-[10px] font-normal text-muted">(você)</span>}
                   </td>
                   <td className="px-2.5 py-3">
-                    {self ? (
+                    {self || m.role === "super_admin" ? (
                       roleLabel[m.role]
                     ) : (
                       <select aria-label={`Perfil de ${m.name}`} value={m.role} onChange={(e) => void patch(m, { role: e.target.value as Role })} className="rounded-lg border border-line bg-surface px-2 py-1.5 text-[11px]">
@@ -146,7 +146,7 @@ export function TeamTab() {
                     <Badge tone={m.active ? "success" : "neutral"}>{m.active ? "Ativo" : "Inativo"}</Badge>
                   </td>
                   <td className="px-2.5 py-3 text-right">
-                    {self ? (
+                    {self || m.role === "super_admin" ? (
                       <span className="text-[10px] text-muted">-</span>
                     ) : (
                       <button type="button" onClick={() => void patch(m, { active: !m.active })} className="rounded-lg border border-line px-2.5 py-1.5 text-[11px] font-semibold text-navy-900 hover:bg-canvas">

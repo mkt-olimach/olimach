@@ -17,7 +17,7 @@ import type { LucideIcon } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { CertificateActionsMenu } from "../components/CertificateActionsMenu";
-import { useAuth } from "../lib/auth";
+import { isAdminRole, useAuth } from "../lib/auth";
 import { SITE_URL } from "../lib/site-url";
 import { formatDate, initials, openCertificatePdf, useDashboardData } from "../lib/certificates";
 import { RevokeDialog } from "./Certificates";
@@ -324,7 +324,7 @@ export function Dashboard() {
                       <StatusBadge status={r.status} />
                     </td>
                     <td className="px-2.5 py-3 text-right">
-                      <CertificateActionsMenu row={r} siteUrl={SITE_URL} canRevoke={profile?.role === "admin"} onRevoke={setRevoking} />
+                      <CertificateActionsMenu row={r} siteUrl={SITE_URL} canRevoke={isAdminRole(profile?.role)} onRevoke={setRevoking} />
                     </td>
                   </tr>
                 ))}
