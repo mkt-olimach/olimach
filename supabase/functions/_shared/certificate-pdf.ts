@@ -125,28 +125,32 @@ function drawQr(page: PDFPage, text: string, x: number, y: number, size: number)
   }
 }
 
-async function drawSigner(doc: PDFDocument, page: PDFPage, signer: Signer | null, centerX: number, baseY: number, bold: PDFFont, regular: PDFFont, role: string) {
-  const width = 210;
-  if (signer?.signature) {
-    const image = signer.signature.type === "png" ? await doc.embedPng(signer.signature.bytes) : await doc.embedJpg(signer.signature.bytes);
-    const scale = Math.min(130 / image.width, 40 / image.height);
-    page.drawImage(image, { x: centerX - (image.width * scale) / 2, y: baseY + 4, width: image.width * scale, height: image.height * scale });
-  }
-  page.drawLine({ start: { x: centerX - width / 2, y: baseY }, end: { x: centerX + width / 2, y: baseY }, thickness: 0.7, color: GRAY });
+/** Campo de assinatura: textos (nome, qualificacao, registro, funcao) acima, imagem sobre a linha. */
+async function drawSigner(doc: PDFDocument, page: PDFPage, signer: Signer | null, centerX: number, lineY: number, bold: PDFFont, regular: PDFFont, role: string) {
+  const width = 215;
   const draw = (text: string, y: number, font: PDFFont, size: number, color = INK) => {
     const clean = toWinAnsi(text);
-    const w = font.widthOfTextAtSize(clean, size);
-    page.drawText(clean, { x: centerX - w / 2, y, size, font, color });
+    page.drawText(clean, { x: centerX - font.widthOfTextAtSize(clean, size) / 2, y, size, font, color });
   };
-  if (!signer) return;
-  draw(signer.name, baseY - 12, bold, fitSize(signer.name, bold, 10, width + 20, 8));
-  let ty = baseY - 23;
-  for (const line of [signer.qualification, signer.registry]) {
-    if (!line.trim()) continue;
-    draw(line, ty, regular, fitSize(line, regular, 8, width + 20, 6.5), GRAY);
+  const texts: Array<{ text: string; font: PDFFont; size: number; color?: typeof INK }> = [];
+  if (signer) {
+    texts.push({ text: signer.name, font: bold, size: fitSize(signer.name, bold, 9.5, width + 30, 7.5) });
+    for (const line of [signer.qualification, signer.registry]) {
+      if (line.trim()) texts.push({ text: line, font: regular, size: fitSize(line, regular, 8, width + 30, 6.5), color: GRAY });
+    }
+  }
+  texts.push({ text: role, font: bold, size: 7.5, color: NAVY });
+  let ty = lineY + 34 + 10 * (texts.length - 1);
+  for (const t of texts) {
+    draw(t.text, ty, t.font, t.size, t.color);
     ty -= 10;
   }
-  draw(role, ty, bold, 7, NAVY);
+  if (signer?.signature) {
+    const image = signer.signature.type === "png" ? await doc.embedPng(signer.signature.bytes) : await doc.embedJpg(signer.signature.bytes);
+    const scale = Math.min(130 / image.width, 30 / image.height);
+    page.drawImage(image, { x: centerX - (image.width * scale) / 2, y: lineY + 1, width: image.width * scale, height: image.height * scale });
+  }
+  page.drawLine({ start: { x: centerX - width / 2, y: lineY }, end: { x: centerX + width / 2, y: lineY }, thickness: 0.7, color: GRAY });
 }
 
 export async function buildCertificatePdf(data: CertificateData): Promise<Uint8Array> {
@@ -170,83 +174,95 @@ export async function buildCertificatePdf(data: CertificateData): Promise<Uint8A
   const front = doc.addPage(PAGE);
   drawWatermark(front);
   drawFrame(front);
+  const left = MARGIN + 24;
+  const right = PAGE[0] - MARGIN - 24;
+  const textWidth = right - left;
 
-  // QR + codigo de validacao: canto superior esquerdo
+  // Topo: codigo e QR a esquerda, titulo ao centro, logo a direita
   const qrSize = 58;
-  const qrX = MARGIN + 6;
-  const qrY = PAGE[1] - 36 - qrSize;
+  const qrX = left - 14;
+  const qrY = PAGE[1] - 52 - qrSize;
+  front.drawText(toWinAnsi(`Certificado: ${data.code}`), { x: qrX, y: PAGE[1] - 44, size: 7.5, font: bold, color: NAVY });
   drawQr(front, data.validationUrl, qrX, qrY, qrSize);
-  front.drawText("Código de validação", { x: qrX, y: qrY - 10, size: 6.5, font: regular, color: GRAY });
-  front.drawText(toWinAnsi(data.code), { x: qrX, y: qrY - 22, size: 10, font: bold, color: NAVY });
-
-  const logoHeight = 62;
+  const logoHeight = 54;
   const logoWidth = (logo.width / logo.height) * logoHeight;
-  front.drawImage(logo, { x: (PAGE[0] - logoWidth) / 2, y: PAGE[1] - 38 - logoHeight, width: logoWidth, height: logoHeight });
+  front.drawImage(logo, { x: right + 14 - logoWidth, y: PAGE[1] - 40 - logoHeight, width: logoWidth, height: logoHeight });
+  drawCentered(front, "CERTIFICADO", PAGE[1] - 92, bold, 24, GRAY, 1.5);
+  drawCentered(front, data.companyName, PAGE[1] - 108, regular, 8.5, GRAY);
 
-  const textWidth = PAGE[0] - 2 * (MARGIN + 24);
-  drawCentered(front, "CERTIFICADO", PAGE[1] - 150, bold, 26, NAVY, 2);
-  drawCentered(front, "Certificamos que", PAGE[1] - 178, regular, 10.5, GRAY);
-  const nameSize = fitSize(data.studentName, bold, 22, textWidth, 12);
-  drawCentered(front, data.studentName, PAGE[1] - 204, bold, nameSize, INK);
-  drawCentered(front, `CPF ${data.cpfMasked}`, PAGE[1] - 219, regular, 8.5, GRAY);
-  drawCentered(front, "concluiu com aproveitamento o treinamento de", PAGE[1] - 240, regular, 10.5, GRAY);
+  drawCentered(front, "Certificamos que", PAGE[1] - 148, regular, 10, GRAY);
+  drawCentered(front, data.studentName, PAGE[1] - 168, bold, fitSize(data.studentName, bold, 18, textWidth, 11), INK);
+  drawCentered(front, `CPF ${data.cpfMasked}`, PAGE[1] - 181, regular, 8, GRAY);
+  drawCentered(front, "concluiu com aproveitamento o treinamento", PAGE[1] - 198, regular, 10, GRAY);
 
-  const courseLines = wrapText(data.courseName, bold, 16, textWidth).slice(0, 3);
-  let y = PAGE[1] - 262;
+  const courseLines = wrapText(`${data.courseName} - ${data.workloadHours}h`, bold, 14, textWidth).slice(0, 3);
+  let y = PAGE[1] - 220;
   for (const line of courseLines) {
-    drawCentered(front, line, y, bold, fitSize(line, bold, 16, textWidth, 11), NAVY);
-    y -= 19;
+    drawCentered(front, line, y, bold, fitSize(line, bold, 14, textWidth, 10), NAVY);
+    y -= 17;
   }
-  const period = data.startDate === data.endDate ? formatDay(data.startDate) : `${formatDay(data.startDate)} a ${formatDay(data.endDate)}`;
-  const workload = `carga horária total de ${data.workloadHours} horas (${data.theoryHours} h teóricas e ${data.practiceHours} h práticas)`;
-  const detail = `com ${workload}, realizado em ${period}, em ${data.location}.`;
-  y -= 2;
-  for (const line of wrapText(detail, regular, 10, textWidth)) {
-    drawCentered(front, line, y, regular, 10, INK);
-    y -= 14;
-  }
-  const validity = data.expiresAt ? `Validade: ${formatDate(data.expiresAt)}` : "Certificado sem prazo de validade definido";
-  drawCentered(front, `Emitido em ${formatDate(data.issuedAt)}  |  ${validity}`, y - 2, regular, 9, GRAY);
-  y -= 26;
+  y -= 12;
 
-  // Conteudo programatico na primeira pagina; o que nao couber continua na segunda.
+  // Conteudo programatico; o que nao couber continua na segunda pagina.
   const bodySize = 8.5;
   const lineHeight = 11;
   const lines = wrapText(data.syllabus.trim() || "Conteúdo programático não informado.", regular, bodySize, textWidth);
-  const frontFloor = 268; // acima da grade de assinaturas
-  front.drawText("CONTEÚDO PROGRAMÁTICO", { x: MARGIN + 24, y, size: 9, font: bold, color: NAVY });
-  front.drawLine({ start: { x: MARGIN + 24, y: y - 4 }, end: { x: PAGE[0] - MARGIN - 24, y: y - 4 }, thickness: 0.6, color: ORANGE });
-  y -= 18;
+  const frontFloor = 372; // acima do bloco de carga horaria e datas
+  front.drawText("CONTEÚDO:", { x: left, y, size: 9, font: bold, color: INK });
+  y -= 14;
   let index = 0;
   while (index < lines.length && y > frontFloor) {
     const line = lines[index] ?? "";
-    if (line) front.drawText(line, { x: MARGIN + 24, y, size: bodySize, font: regular, color: INK });
+    if (line) front.drawText(line, { x: left, y, size: bodySize, font: regular, color: INK });
     y -= lineHeight;
     index++;
   }
-  if (index < lines.length) {
-    front.drawText("Continua na página seguinte.", { x: MARGIN + 24, y: frontFloor - 6, size: 7.5, font: regular, color: GRAY });
+  const overflow = index < lines.length;
+  if (overflow) {
+    front.drawText("Continua na página seguinte.", { x: left, y: Math.max(y, frontFloor - 4), size: 7.5, font: regular, color: GRAY });
+    y = frontFloor - 16;
   }
 
-  // Quatro campos de assinatura em grade 2x2: aluno (em branco, com o nome abaixo) e as tres padrao.
+  // Carga horaria e datas, logo abaixo do conteudo
+  y -= 10;
+  front.drawText(toWinAnsi(`Teoria: ${String(data.theoryHours).padStart(2, "0")}h`), { x: left, y, size: 9, font: regular, color: INK });
+  front.drawText(toWinAnsi(`Prática: ${String(data.practiceHours).padStart(2, "0")}h`), { x: left + 150, y, size: 9, font: regular, color: INK });
+  front.drawText(toWinAnsi(`Carga Horária: ${String(data.workloadHours).padStart(2, "0")}h`), { x: left + 300, y, size: 9, font: regular, color: INK });
+  y -= 26;
+  const dots = (d: Date) => formatDate(d).replace(/\//g, ".");
+  const dotsDay = (iso: string) => formatDay(iso).replace(/\//g, ".");
+  const period = data.startDate === data.endDate ? dotsDay(data.startDate) : `${dotsDay(data.startDate)} a ${dotsDay(data.endDate)}`;
+  front.drawText(toWinAnsi(`Período: ${period}`), { x: left, y, size: 9, font: bold, color: INK });
+  const emitted = toWinAnsi(`Emitido: ${dots(data.issuedAt)}`);
+  front.drawText(emitted, { x: right - bold.widthOfTextAtSize(emitted, 9), y, size: 9, font: bold, color: INK });
+  y -= 14;
+  front.drawText(toWinAnsi(data.expiresAt ? `Válido até: ${dots(data.expiresAt)}` : "Sem prazo de validade definido"), { x: left, y, size: 9, font: bold, color: INK });
+  front.drawText(toWinAnsi(`Local: ${data.location}`), { x: right - regular.widthOfTextAtSize(toWinAnsi(`Local: ${data.location}`), 8.5), y, size: 8.5, font: regular, color: GRAY });
+
+  // Assinaturas em grade 2x2 (ordem do modelo): diretoria, engenheiro tecnico, tecnico em seguranca e aluno
   const leftX = PAGE[0] / 4 + 6;
   const rightX = (PAGE[0] * 3) / 4 - 6;
-  const rowTop = 196;
-  const rowBottom = 92;
-  const student: Signer = { name: data.studentName, qualification: `CPF ${data.cpfMasked}`, registry: "", signature: null };
-  await drawSigner(doc, front, student, leftX, rowTop, bold, regular, "Aluno");
-  const standard = data.signers.slice(0, 3);
+  const rowTop = 222;
+  const rowBottom = 112;
+  const byOrder = [data.signers[1], data.signers[0], data.signers[2]];
   const spots: Array<[number, number]> = [
+    [leftX, rowTop],
     [rightX, rowTop],
     [leftX, rowBottom],
-    [rightX, rowBottom],
   ];
-  for (let i = 0; i < standard.length; i++) {
-    const item = standard[i];
+  for (let i = 0; i < byOrder.length; i++) {
+    const item = byOrder[i];
     const spot = spots[i];
     if (item && spot) await drawSigner(doc, front, item.signer, spot[0], spot[1], bold, regular, item.role);
   }
-  drawCentered(front, toWinAnsi(`${data.companyName}  |  CNPJ ${data.companyCnpj}`), 30, regular, 8, GRAY);
+  await drawSigner(doc, front, null, rightX, rowBottom, bold, regular, "Assinatura do Aluno");
+  const studentLine = toWinAnsi(data.studentName);
+  const studentSize = fitSize(studentLine, regular, 8, 230, 6.5);
+  front.drawText(studentLine, { x: rightX - regular.widthOfTextAtSize(studentLine, studentSize) / 2, y: rowBottom - 11, size: studentSize, font: regular, color: GRAY });
+
+  front.drawLine({ start: { x: left - 14, y: 64 }, end: { x: right + 14, y: 64 }, thickness: 0.6, color: GRAY });
+  drawCentered(front, toWinAnsi(`${data.companyName}  |  CNPJ ${data.companyCnpj}`), 50, regular, 8, GRAY);
+  drawCentered(front, toWinAnsi(`Valide em ${data.validationUrl}`), 39, regular, 7, GRAY);
 
   // ------------------------------------------------- segunda pagina (so se sobrar conteudo)
   let pageNumber = 1;
