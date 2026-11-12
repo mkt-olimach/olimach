@@ -30,8 +30,8 @@ const SIGNATURE_TYPES: Record<string, string> = { "image/png": "png", "image/jpe
 function SignaturePreview({ label, name, qualification, registry, imageUrl }: { label: string; name: string; qualification: string; registry: string; imageUrl: string | null }) {
   return (
     <div className="rounded-btn-admin border border-dashed border-line bg-white px-4 pb-4 pt-3" aria-label={`Pré-visualização do campo de assinatura: ${label}`}>
-      <div className="grid h-16 place-items-center">
-        {imageUrl ? <img src={imageUrl} alt={`Assinatura de ${name || label}`} className="max-h-full max-w-full object-contain" /> : <span className="text-[11px] text-muted">Sem assinatura</span>}
+      <div className="flex h-16 items-center justify-center overflow-hidden">
+        {imageUrl ? <img src={imageUrl} alt={`Assinatura de ${name || label}`} className="h-16 max-w-full object-contain" /> : <span className="text-[11px] text-muted">Sem assinatura</span>}
       </div>
       <div className="border-t border-[#6b7689]" />
       <p className="mt-1.5 text-center text-[11px] font-bold text-ink">{name || "Nome completo"}</p>
