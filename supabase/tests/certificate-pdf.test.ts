@@ -18,6 +18,7 @@ const sample = (over: Partial<CertificateData> = {}): CertificateData => ({
   workloadHours: 16,
   theoryHours: 10,
   practiceHours: 6,
+  technicalReference: "NR - 33; NBR 16577 e OSHA 29 CFR 1910.146",
   startDate: "2026-11-03",
   endDate: "2026-11-04",
   location: "Macaé, RJ",

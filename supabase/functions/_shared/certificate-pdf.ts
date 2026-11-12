@@ -22,6 +22,8 @@ export interface CertificateData {
   workloadHours: number;
   theoryHours: number;
   practiceHours: number;
+  /** Normas e padroes de referencia (pode ser vazio). */
+  technicalReference: string;
   /** yyyy-mm-dd */
   startDate: string;
   endDate: string;
@@ -207,7 +209,11 @@ export async function buildCertificatePdf(data: CertificateData): Promise<Uint8A
   const bodySize = 8.5;
   const lineHeight = 11;
   const lines = wrapText(data.syllabus.trim() || "Conteúdo programático não informado.", regular, bodySize, textWidth);
-  const frontFloor = 372; // acima do bloco de carga horaria e datas
+  const refText = data.technicalReference.trim() ? `Referência Técnica: ${data.technicalReference.trim()}` : "";
+  const refLines = refText ? wrapText(refText, regular, 8, textWidth) : [];
+  // bloco de carga horaria, referencia tecnica e datas (altura) + margem acima da grade de assinaturas
+  const infoHeight = 14 + (refLines.length ? refLines.length * 10 + 8 : 0) + 26 + 14 + 10;
+  const frontFloor = 300 + infoHeight;
   front.drawText("CONTEÚDO:", { x: left, y, size: 9, font: bold, color: INK });
   y -= 14;
   let index = 0;
@@ -225,10 +231,20 @@ export async function buildCertificatePdf(data: CertificateData): Promise<Uint8A
 
   // Carga horaria e datas, logo abaixo do conteudo
   y -= 10;
-  front.drawText(toWinAnsi(`Teoria: ${String(data.theoryHours).padStart(2, "0")}h`), { x: left, y, size: 9, font: regular, color: INK });
-  front.drawText(toWinAnsi(`Prática: ${String(data.practiceHours).padStart(2, "0")}h`), { x: left + 150, y, size: 9, font: regular, color: INK });
-  front.drawText(toWinAnsi(`Carga Horária: ${String(data.workloadHours).padStart(2, "0")}h`), { x: left + 300, y, size: 9, font: regular, color: INK });
-  y -= 26;
+  const hours = (n: number) => (n > 0 ? `${String(n).padStart(2, "0")}h` : "N/A");
+  front.drawText(toWinAnsi(`Teoria: ${hours(data.theoryHours)}`), { x: left, y, size: 9, font: regular, color: INK });
+  front.drawText(toWinAnsi(`Prática: ${hours(data.practiceHours)}`), { x: left + 150, y, size: 9, font: regular, color: INK });
+  front.drawText(toWinAnsi(`Carga Horária: ${hours(data.workloadHours)}`), { x: left + 300, y, size: 9, font: regular, color: INK });
+  y -= 14;
+  if (refLines.length) {
+    y -= 4;
+    for (const line of refLines) {
+      front.drawText(line, { x: left, y, size: 8, font: regular, color: INK });
+      y -= 10;
+    }
+    y -= 4;
+  }
+  y -= 12;
   const dots = (d: Date) => formatDate(d).replace(/\//g, ".");
   const dotsDay = (iso: string) => formatDay(iso).replace(/\//g, ".");
   const period = data.startDate === data.endDate ? dotsDay(data.startDate) : `${dotsDay(data.startDate)} a ${dotsDay(data.endDate)}`;

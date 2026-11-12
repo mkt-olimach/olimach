@@ -38,6 +38,8 @@ const courseFields = {
   theory_hours: z.number({ invalid_type_error: "Informe a carga horaria teorica" }).int("Use horas inteiras").min(0, "Use zero ou mais horas"),
   practice_hours: z.number({ invalid_type_error: "Informe a carga horaria pratica" }).int("Use horas inteiras").min(0, "Use zero ou mais horas"),
   syllabus: z.string(),
+  /** Normas e padroes de referencia, impressos no certificado. */
+  technical_reference: z.string().trim().max(1000, "Use no maximo 1000 caracteres").default(""),
   /** Texto de divulgacao exibido na landing. */
   description: z.string().trim().max(1000, "Use no maximo 1000 caracteres").default(""),
   /** Caminho da capa no bucket publico course-covers. */
