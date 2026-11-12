@@ -8,8 +8,10 @@ import {
   ChevronDown,
   Clock,
   Compass,
+  Facebook,
   GraduationCap,
   Headphones,
+  Mail,
   MapPin,
   MonitorSmartphone,
   Phone,
@@ -22,9 +24,7 @@ import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { categoryLabel, faq, modalityLabel } from "../content/courses";
 import { useCatalog } from "../lib/catalog";
-import { courseWhatsappMessage, whatsappLink } from "../lib/whatsapp";
-
-const generalMessage = "Olá! Gostaria de mais informações sobre os treinamentos da Olimach.";
+import { useCompany, useWhatsapp } from "../lib/company";
 
 /* Imagens do mockup (derivadas da referencia visual). Trocar por fotografias originais ou licenciadas
    da Olimach em producao, mantendo o alt descritivo com termo local. */
@@ -56,6 +56,8 @@ function Eyebrow({ children, className }: { children: ReactNode; className?: str
 }
 
 export function Home() {
+  const company = useCompany();
+  const wa = useWhatsapp();
   const [params] = useSearchParams();
   const [showAll, setShowAll] = useState(false);
   const { courses, loading: loadingCourses } = useCatalog();
@@ -79,16 +81,18 @@ export function Home() {
             Capacitação que impulsiona o seu futuro <span className="text-navy-700">no setor offshore.</span>
           </h1>
           <p className="mt-5 max-w-lg text-muted">
-            A Olimach é uma escola de treinamentos em Macaé, RJ, com cursos de NR e profissionalizantes para quem atua ou
+            {company.name} é uma escola de treinamentos{company.cityState ? ` em ${company.cityState}` : ""}, com cursos de NR e profissionalizantes para quem atua ou
             deseja crescer nas áreas onshore e offshore.
           </p>
           <div className="mt-6 flex flex-wrap gap-3">
             <a href="#cursos" className={buttonClasses("accent", "landing")}>
               Conheça nossos cursos <ArrowRight size={16} aria-hidden />
             </a>
-            <a href={whatsappLink(generalMessage)} target="_blank" rel="noopener noreferrer" className={buttonClasses("secondary", "landing")}>
-              Fale conosco <ArrowUpRight size={16} aria-hidden />
-            </a>
+            {wa.available && (
+              <a href={wa.link(wa.generalMessage)} target="_blank" rel="noopener noreferrer" className={buttonClasses("secondary", "landing")}>
+                Fale conosco <ArrowUpRight size={16} aria-hidden />
+              </a>
+            )}
           </div>
           <p className="mt-6 flex items-center gap-2 text-[11px] text-[#8b9fb3]">
             <span className="h-2 w-2 rounded-full bg-orange-500" aria-hidden /> Conhecimento e segurança para avançar.
@@ -147,14 +151,14 @@ export function Home() {
       {/* SOBRE + DESTAQUE */}
       <section id="sobre" className="mx-auto grid max-w-[1400px] gap-5 px-5 pb-5 pt-10 md:px-10 lg:grid-cols-[36%_28%_1fr]">
         <div className="lg:pr-7">
-          <Eyebrow>Sobre a Olimach</Eyebrow>
+          <Eyebrow>Sobre {company.name}</Eyebrow>
           <h2 className="mb-4 mt-4 text-2xl leading-snug text-navy-900 md:text-3xl">
             Mais que treinamentos,<br />formamos profissionais.
           </h2>
           <p className="mb-5 text-sm text-muted">
-            A Olimach busca contribuir para uma atuação mais segura, eficiente e preparada para os desafios de um setor
+            {company.name} busca contribuir para uma atuação mais segura, eficiente e preparada para os desafios de um setor
             que exige conhecimento, responsabilidade e atualização contínua.{" "}
-            <Pending>texto institucional aprovado pela Olimach</Pending>
+            <Pending>{`texto institucional aprovado por ${company.name}`}</Pending>
           </p>
           <ul className="mb-5 space-y-3 text-xs text-muted">
             {[
@@ -198,7 +202,7 @@ export function Home() {
               <h3 className="mb-3 mt-5 max-w-xs text-2xl leading-snug !text-white">{featured.name}</h3>
               <p className="max-w-xs text-xs text-[#d1dce9]">{featured.summary}</p>
               <a
-                href={whatsappLink(courseWhatsappMessage(featured.name))}
+                href={wa.link(wa.courseMessage(featured.name))}
                 target="_blank"
                 rel="noopener noreferrer"
                 className={`${buttonClasses("accent", "landing")} mt-5`}
@@ -315,7 +319,7 @@ export function Home() {
                   )}
                 </p>
                 <a
-                  href={whatsappLink(courseWhatsappMessage(course.name))}
+                  href={wa.link(wa.courseMessage(course.name))}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center justify-between border-t border-line py-3.5 text-xs font-bold text-navy-700"
@@ -338,7 +342,9 @@ export function Home() {
         <Eyebrow>Dúvidas frequentes</Eyebrow>
         <h2 className="mb-6 mt-3 text-2xl text-navy-900 md:text-3xl">Suas dúvidas, respondidas.</h2>
         <div className="divide-y divide-line rounded-2xl border border-line bg-surface shadow-sm">
-          {faq.map((item) => (
+          {faq.map((rawItem) => {
+            const item = { q: rawItem.q.replaceAll("Olimach", company.name), a: rawItem.a.replaceAll("Olimach", company.name) };
+            return (
             <details key={item.q} className="group px-5">
               <summary className="flex cursor-pointer list-none items-center justify-between gap-4 py-5 text-sm font-bold text-navy-900 [&::-webkit-details-marker]:hidden">
                 {item.q}
@@ -346,7 +352,8 @@ export function Home() {
               </summary>
               <p className="pb-5 pr-6 text-sm text-muted">{item.a}</p>
             </details>
-          ))}
+            );
+          })}
         </div>
       </section>
 
@@ -361,19 +368,30 @@ export function Home() {
             <h2 className="mb-1 mt-2 text-xl !text-white md:text-2xl">Invista na sua próxima qualificação.</h2>
             <p className="text-xs text-[#c2d0df]">Informações sobre treinamentos, turmas e inscrição, direto com a equipe.</p>
             <ul className="mt-4 flex flex-wrap gap-x-6 gap-y-2 text-xs text-[#d4dfed]">
-              <li className="flex items-center gap-2"><MapPin size={14} aria-hidden /> Macaé, RJ <Pending>endereço completo</Pending></li>
-              <li className="flex items-center gap-2"><Clock size={14} aria-hidden /> Seg a sex 08h às 17h30, sáb 08h às 12h30</li>
-              <li className="flex items-center gap-2"><Phone size={14} aria-hidden /> (22) 99615-0138</li>
+              <li className="flex items-center gap-2">
+                <MapPin size={14} aria-hidden /> {company.fullAddress || company.cityState || <Pending>endereço completo</Pending>}
+              </li>
+              {company.businessHours && <li className="flex items-center gap-2"><Clock size={14} aria-hidden /> {company.businessHours}</li>}
+              {(company.phone || company.whatsapp) && <li className="flex items-center gap-2"><Phone size={14} aria-hidden /> {company.phone || company.whatsapp}</li>}
+              {company.email && <li className="flex items-center gap-2"><Mail size={14} aria-hidden /> {company.email}</li>}
+              {company.facebook && (
+                <li className="flex items-center gap-2">
+                  <Facebook size={14} aria-hidden />
+                  <a href={company.facebook} target="_blank" rel="noopener noreferrer" className="hover:text-white">Facebook</a>
+                </li>
+              )}
             </ul>
           </div>
-          <a
-            href={whatsappLink(generalMessage)}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex shrink-0 items-center justify-center gap-3 whitespace-nowrap rounded-full bg-white px-6 py-3.5 text-sm font-bold text-navy-900 hover:bg-canvas md:ml-auto"
-          >
-            Falar com a equipe <ArrowUpRight size={18} aria-hidden />
-          </a>
+          {wa.available && (
+            <a
+              href={wa.link(wa.generalMessage)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex shrink-0 items-center justify-center gap-3 whitespace-nowrap rounded-full bg-white px-6 py-3.5 text-sm font-bold text-navy-900 hover:bg-canvas md:ml-auto"
+            >
+              Falar com a equipe <ArrowUpRight size={18} aria-hidden />
+            </a>
+          )}
         </div>
       </section>
     </>

@@ -1,11 +1,9 @@
 import { BrandLogo, Pending, cn } from "@olimach/ui";
-import { ArrowUpRight, MapPin, Menu, MessageCircle, Search, UserRound, X } from "lucide-react";
+import { ArrowUpRight, Facebook, Instagram, Linkedin, Mail, MapPin, Menu, MessageCircle, Phone, Search, UserRound, X, Youtube } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { FormEvent, MouseEvent, ReactNode } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { whatsappLink } from "../lib/whatsapp";
-
-const generalMessage = "Olá! Gostaria de mais informações sobre os treinamentos da Olimach.";
+import { useCompany, useWhatsapp } from "../lib/company";
 
 const nav = [
   { href: "/#inicio", label: "Início" },
@@ -76,6 +74,8 @@ function AnchorLink({ href, className, children, onNavigate }: { href: string; c
 }
 
 export function SiteLayout() {
+  const company = useCompany();
+  const wa = useWhatsapp();
   const { pathname, search, hash } = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -92,8 +92,8 @@ export function SiteLayout() {
       <div>
         <header className="sticky top-0 z-30 border-b border-line bg-surface/95 backdrop-blur">
           <div className="mx-auto flex max-w-[1400px] items-center justify-between gap-6 px-5 py-1 md:px-10">
-            <Link to="/" aria-label="OLIMACH, página inicial" className="shrink-0">
-              <BrandLogo className="h-20 w-auto md:h-24" />
+            <Link to="/" aria-label={`${company.name}, página inicial`} className="shrink-0">
+              <BrandLogo src={company.logoUrl ?? undefined} name={company.name} className="h-20 w-auto md:h-24" />
             </Link>
 
             <nav
@@ -144,15 +144,29 @@ export function SiteLayout() {
         <footer className="bg-[#092744] text-white">
           <div className="mx-auto grid max-w-[1400px] gap-10 px-5 pb-10 pt-12 text-xs md:px-10 lg:grid-cols-[1.5fr_0.75fr_0.75fr_1.2fr]">
             <div>
-              <BrandLogo className="h-24 w-auto rounded-lg bg-white p-2" />
+              <BrandLogo src={company.logoUrl ?? undefined} name={company.name} className="h-24 w-auto rounded-lg bg-white p-2" />
               <p className="mt-5 max-w-[270px] text-[#a6bad0]">
-                Treinamentos onshore e offshore em Macaé, RJ, com foco em segurança, desenvolvimento e qualificação.
+                Treinamentos onshore e offshore{company.cityState ? ` em ${company.cityState}` : ""}, com foco em segurança, desenvolvimento e qualificação.
               </p>
+              <div className="mt-4 flex gap-3 text-[#b0c3d8]">
+                {[
+                  { href: company.facebook, label: "Facebook", Icon: Facebook },
+                  { href: company.instagram, label: "Instagram", Icon: Instagram },
+                  { href: company.linkedin, label: "LinkedIn", Icon: Linkedin },
+                  { href: company.youtube, label: "YouTube", Icon: Youtube },
+                ]
+                  .filter((s) => s.href)
+                  .map(({ href, label, Icon }) => (
+                    <a key={label} href={href} target="_blank" rel="noopener noreferrer" aria-label={`${company.name} no ${label}`} className="hover:text-white">
+                      <Icon size={18} aria-hidden />
+                    </a>
+                  ))}
+              </div>
             </div>
             <div className="flex flex-col gap-3 text-[#b0c3d8]">
               <h3 className="mb-2 text-xs font-extrabold text-white">Explore</h3>
               <AnchorLink href="/#cursos" className="hover:text-white">Cursos e treinamentos</AnchorLink>
-              <AnchorLink href="/#sobre" className="hover:text-white">Sobre a Olimach</AnchorLink>
+              <AnchorLink href="/#sobre" className="hover:text-white">Sobre {company.name}</AnchorLink>
               <Link to="/validar" className="hover:text-white">Validar certificado</Link>
             </div>
             <div className="flex flex-col gap-3 text-[#b0c3d8]">
@@ -164,37 +178,49 @@ export function SiteLayout() {
             <div className="flex flex-col gap-3 text-[#b0c3d8]">
               <h3 className="mb-2 text-xs font-extrabold text-white">Vamos conversar?</h3>
               <p>Entre em contato para conhecer os treinamentos e consultar turmas.</p>
-              <p className="flex items-center gap-2"><MapPin size={16} aria-hidden /> Macaé, RJ</p>
-              <a
-                href={whatsappLink(generalMessage)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-2 inline-flex items-center gap-2 font-bold text-white"
-              >
-                WhatsApp (22) 99615-0138 <ArrowUpRight size={16} aria-hidden />
-              </a>
+              {company.fullAddress && (
+                <p className="flex items-start gap-2"><MapPin size={16} className="mt-0.5 shrink-0" aria-hidden /> {company.fullAddress}</p>
+              )}
+              {company.phone && (
+                <a href={`tel:+55${company.phone.replace(/\D/g, "")}`} className="flex items-center gap-2 hover:text-white"><Phone size={16} aria-hidden /> {company.phone}</a>
+              )}
+              {company.email && (
+                <a href={`mailto:${company.email}`} className="flex items-center gap-2 hover:text-white"><Mail size={16} aria-hidden /> {company.email}</a>
+              )}
+              {wa.available && (
+                <a
+                  href={wa.link(wa.generalMessage)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mt-2 inline-flex items-center gap-2 font-bold text-white"
+                >
+                  WhatsApp {company.whatsapp} <ArrowUpRight size={16} aria-hidden />
+                </a>
+              )}
             </div>
           </div>
           <div className="border-t border-[#31506c]">
             <div className="mx-auto flex max-w-[1400px] flex-col gap-2 px-5 py-5 text-[11px] text-[#92a9be] md:flex-row md:justify-between md:px-10">
-              <span>© {new Date().getFullYear()} Olimach. Todos os direitos reservados.</span>
-              <span><Pending>razão social e CNPJ</Pending></span>
+              <span>© {new Date().getFullYear()} {company.name}. Todos os direitos reservados.</span>
+              <span>{company.legalName && company.cnpj ? `${company.legalName} - CNPJ ${company.cnpj}` : <Pending>razão social e CNPJ</Pending>}</span>
               <span>Desenvolvido por Agência 1925</span>
             </div>
           </div>
         </footer>
       </div>
 
+      {wa.available && (
       <a
-        href={whatsappLink(generalMessage)}
+        href={wa.link(wa.generalMessage)}
         target="_blank"
         rel="noopener noreferrer"
-        aria-label="Conversar com a Olimach pelo WhatsApp"
+        aria-label={`Conversar com ${company.name} pelo WhatsApp`}
         className="fixed bottom-5 right-5 z-40 flex items-center gap-2 rounded-full bg-[#1cbd65] p-4 text-sm font-extrabold text-white shadow-lg transition-transform hover:-translate-y-1 sm:px-5 sm:py-3.5"
       >
         <MessageCircle size={24} aria-hidden />
         <span className="hidden sm:inline">Fale conosco</span>
       </a>
+      )}
     </div>
   );
 }

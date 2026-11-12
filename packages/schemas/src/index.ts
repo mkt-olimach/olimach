@@ -191,3 +191,6 @@ export const newPasswordSchema = z
   .regex(/[0-9]/, "A senha deve ter pelo menos um número.");
 
 export const emailSchema = z.string().trim().email("Informe um e-mail válido.");
+
+export { DEFAULT_COMPANY, buildCompanyView, publicCompanySchema, whatsappDigits } from "./company";
+export type { CompanyView, PublicCompany } from "./company";

@@ -5,12 +5,14 @@ import { lazy, Suspense, useState } from "react";
 import type { FormEvent } from "react";
 import { Navigate, useLocation, useNavigate } from "react-router-dom";
 import { AuroraBackground } from "../components/AuroraBackground";
+import { useCompany } from "../lib/company";
 import { useAuth } from "../lib/auth";
 
 /* three.js so e baixado quando o crachá aparece (telas largas). */
 const Lanyard = lazy(() => import("../components/Lanyard/Lanyard"));
 
 export function Login() {
+  const { company } = useCompany();
   const { session, configured, signIn, requestPasswordReset } = useAuth();
   const navigate = useNavigate();
   const notice = (useLocation().state as { notice?: string } | null)?.notice ?? null;
@@ -83,9 +85,9 @@ export function Login() {
 
       <main className="relative z-10 w-full max-w-[26rem] overflow-hidden rounded-2xl border border-line bg-surface shadow-lg">
         <header className="px-6 pb-5 pt-6">
-          <BrandLogo className="h-20 w-auto" />
+          <BrandLogo src={company.logoUrl ?? undefined} name={company.name} className="h-20 w-auto" />
           <p className="mt-4 text-[11px] font-extrabold uppercase tracking-[0.2em] text-brand-500">Administração</p>
-          <h1 className="mt-2 text-2xl">{mode === "login" ? "Entrar no Olimach Admin" : "Recuperar senha"}</h1>
+          <h1 className="mt-2 text-2xl">{mode === "login" ? `Entrar no ${company.name} Admin` : "Recuperar senha"}</h1>
           <p className="mt-2 text-sm text-muted">
             {mode === "login"
               ? "Informe suas credenciais para acessar o painel."

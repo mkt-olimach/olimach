@@ -1,7 +1,9 @@
 import { Pending } from "@olimach/ui";
+import { useCompany } from "../lib/company";
 
 /* Rascunho tecnico da politica. O texto final precisa de revisao juridica da Olimach antes de ir ao ar. */
 export function Privacy() {
+  const company = useCompany();
   return (
     <section className="mx-auto max-w-3xl px-4 py-16">
       <h1 className="text-3xl">Política de privacidade</h1>
@@ -13,7 +15,7 @@ export function Privacy() {
         <section>
           <h2 className="text-xl">Dados que tratamos</h2>
           <p className="mt-2 text-muted">
-            Para emitir certificados, a Olimach trata nome completo, CPF, data de nascimento, telefone, e-mail e
+            Para emitir certificados, {company.name} trata nome completo, CPF, data de nascimento, telefone, e-mail e
             empresa dos alunos, além dos dados da matrícula (curso, turma, presença e aprovação).
           </p>
         </section>
@@ -35,7 +37,7 @@ export function Privacy() {
           <h2 className="text-xl">Seus direitos</h2>
           <p className="mt-2 text-muted">
             Você pode solicitar confirmação de tratamento, acesso, correção e demais direitos previstos na Lei
-            13.709/2018 (LGPD) pelo WhatsApp da Olimach.
+            13.709/2018 (LGPD) pelo WhatsApp {company.name === "Olimach" ? "da Olimach" : `de ${company.name}`}.
           </p>
         </section>
       </div>

@@ -18,6 +18,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { CertificateActionsMenu } from "../components/CertificateActionsMenu";
 import { isAdminRole, useAuth } from "../lib/auth";
+import { useCompany } from "../lib/company";
 import { SITE_URL } from "../lib/site-url";
 import { formatDate, initials, openCertificatePdf, useDashboardData } from "../lib/certificates";
 import { RevokeDialog } from "./Certificates";
@@ -48,6 +49,7 @@ function Metric({ icon: Icon, value, label }: { icon: LucideIcon; value: number 
 }
 
 function CertificatePreview({ row }: { row: CertificateRow }) {
+  const { company } = useCompany();
   const link = SITE_URL ? `${SITE_URL}/validar/${row.code}` : null;
   const [qr, setQr] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -83,7 +85,7 @@ function CertificatePreview({ row }: { row: CertificateRow }) {
   return (
     <>
       <div className="relative overflow-hidden rounded-[11px] border border-line bg-white px-4 pb-4 pt-6 text-center">
-        <BrandLogo className="mx-auto h-14 w-auto" />
+        <BrandLogo src={company.logoUrl ?? undefined} name={company.name} className="mx-auto h-14 w-auto" />
         <p className="mb-3 mt-3 text-xs font-semibold tracking-[0.22em] text-navy-900">CERTIFICADO</p>
         <p className="text-[10px] text-muted">Certificamos que</p>
         <h3 className="my-1 text-lg">{row.studentName}</h3>
@@ -167,6 +169,7 @@ function CertificatePreview({ row }: { row: CertificateRow }) {
 }
 
 export function Dashboard() {
+  const { company } = useCompany();
   const [params, setParams] = useSearchParams();
   const { profile } = useAuth();
   const { rows, stats, loading, error, reload } = useDashboardData();
@@ -209,7 +212,7 @@ export function Dashboard() {
       <section className="mb-5 grid items-start gap-6 lg:grid-cols-[minmax(0,1.65fr)_minmax(290px,0.95fr)]">
         <div className="py-2">
           <p className="mb-4 text-[11px] font-medium uppercase tracking-[0.16em] text-[#6389b9]">
-            Olimach consultoria e treinamentos offshore
+            {company.legalName || company.name}
           </p>
           <div className="flex flex-wrap items-center justify-between gap-4">
             <h1 className="max-w-[500px] text-2xl leading-tight md:text-[34px]">Gerencie seus certificados de forma simples e segura.</h1>
