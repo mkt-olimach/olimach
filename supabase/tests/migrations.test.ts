@@ -245,14 +245,14 @@ describe("RLS", () => {
     expect((await as("authenticated", ADMIN, () => q<{ a: boolean; s: boolean }>("select public.is_admin() as a, public.is_super_admin() as s")))[0]).toEqual({ a: true, s: false });
 
     // dados da empresa: so o super_admin escreve; equipe le
-    const company = "insert into public.company_settings (company_name, phone) values ('Empresa Teste', '(22) 0000-0000') on conflict (singleton) do update set phone = excluded.phone";
+    const company = "insert into public.company_settings (company_name, phone, address, number, complement, neighborhood) values ('Empresa Teste', '(22) 0000-0000', 'Rua A', '10', 'Sala 2', 'Centro') on conflict (singleton) do update set phone = excluded.phone";
     await expect(as("authenticated", ADMIN, () => db.query(company))).rejects.toThrow(/row-level security/);
     await expect(as("authenticated", SECRETARIA, () => db.query(company))).rejects.toThrow(/row-level security/);
     await as("authenticated", SUPER, () => db.query(company));
     expect(await as("authenticated", SECRETARIA, () => q("select 1 from public.company_settings"))).toHaveLength(1);
     expect(await as("anon", null, () => q("select 1 from public.company_settings").catch(() => "negado"))).toBe("negado");
-    const pub = await as("anon", null, () => q<{ company_name: string; phone: string }>("select company_name, phone from public.public_company()"));
-    expect(pub).toEqual([{ company_name: "Empresa Teste", phone: "(22) 0000-0000" }]);
+    const pub = await as("anon", null, () => q<{ company_name: string; phone: string; number: string }>("select company_name, phone, number from public.public_company()"));
+    expect(pub).toEqual([{ company_name: "Empresa Teste", phone: "(22) 0000-0000", number: "10" }]);
 
     // admin nao promove ninguem a super_admin nem mexe em um
     await expect(as("authenticated", ADMIN, () => db.query(`update public.profiles set role = 'super_admin' where id = '${SECRETARIA}'`))).rejects.toThrow(/super administrador/);
