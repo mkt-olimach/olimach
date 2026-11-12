@@ -1,10 +1,11 @@
 import { Badge, Button } from "@olimach/ui";
 import { ImageUp, Trash2 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { Navigate } from "react-router-dom";
 import { Field, PageHeader, dbErrorMessage, inputClass } from "../components/ui";
 import { isSuperAdminRole, useAuth } from "../lib/auth";
+import { isCepComplete, isPhoneComplete, maskCep, maskPhone, onlyDigits } from "../lib/masks";
 import { supabase } from "../lib/supabase";
 import { useToast } from "../lib/toast";
 
@@ -23,6 +24,9 @@ interface CompanyRow {
   email: string;
   website: string;
   address: string;
+  number: string;
+  complement: string;
+  neighborhood: string;
   city: string;
   state: string;
   postal_code: string;
@@ -34,7 +38,7 @@ interface CompanyRow {
   favicon_path: string | null;
 }
 
-const TEXT_FIELDS = ["company_name", "legal_name", "cnpj", "phone", "whatsapp", "email", "website", "address", "city", "state", "postal_code", "facebook", "instagram", "linkedin", "youtube"] as const;
+const TEXT_FIELDS = ["company_name", "legal_name", "cnpj", "phone", "whatsapp", "email", "website", "address", "number", "complement", "neighborhood", "city", "state", "postal_code", "facebook", "instagram", "linkedin", "youtube"] as const;
 type TextField = (typeof TEXT_FIELDS)[number];
 type Values = Record<TextField, string>;
 
@@ -50,6 +54,9 @@ const LIMITS: Record<TextField, number> = {
   email: 160,
   website: 200,
   address: 200,
+  number: 20,
+  complement: 80,
+  neighborhood: 80,
   city: 80,
   state: 40,
   postal_code: 20,
@@ -149,6 +156,8 @@ export function WhiteLabel() {
   const [removeFavicon, setRemoveFavicon] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
+  const [cepStatus, setCepStatus] = useState<{ tone: "info" | "error"; text: string } | null>(null);
+  const lastCep = useRef("");
   const isSuper = isSuperAdminRole(profile?.role);
 
   const load = useCallback(async () => {
@@ -177,7 +186,35 @@ export function WhiteLabel() {
   if (!isSuper) return <Navigate to="/" replace />;
 
   const set = (key: TextField, value: string) => setValues((v) => ({ ...v, [key]: value }));
-  const text = (key: TextField, label: string, opts?: { hint?: string; type?: string; className?: string; placeholder?: string }) => (
+
+  /** Preenche logradouro, bairro, cidade e estado a partir do CEP (ViaCEP). Numero e complemento ficam com voce. */
+  async function lookupCep(masked: string) {
+    const cep = onlyDigits(masked);
+    if (cep.length !== 8 || cep === lastCep.current) return;
+    lastCep.current = cep;
+    setCepStatus({ tone: "info", text: "Buscando endereço..." });
+    try {
+      const response = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+      if (!response.ok) throw new Error(String(response.status));
+      const data = (await response.json()) as { erro?: boolean | string; logradouro?: string; bairro?: string; localidade?: string; uf?: string };
+      if (data.erro) {
+        lastCep.current = "";
+        return setCepStatus({ tone: "error", text: "CEP não encontrado. Preencha o endereço manualmente." });
+      }
+      setValues((v) => ({
+        ...v,
+        address: data.logradouro?.trim() || v.address,
+        neighborhood: data.bairro?.trim() || v.neighborhood,
+        city: data.localidade?.trim() || v.city,
+        state: data.uf?.trim() || v.state,
+      }));
+      setCepStatus({ tone: "info", text: "Endereço preenchido pelo CEP. Complete número e complemento." });
+    } catch {
+      lastCep.current = "";
+      setCepStatus({ tone: "error", text: "Não foi possível consultar o CEP agora. Preencha o endereço manualmente." });
+    }
+  }
+  const text = (key: TextField, label: string, opts?: { hint?: string; type?: string; className?: string; placeholder?: string; mask?: (v: string) => string; inputMode?: "tel" | "numeric" }) => (
     <Field label={label} error={errors[key]} hint={opts?.hint} className={opts?.className}>
       {(p) => (
         <input
@@ -188,7 +225,8 @@ export function WhiteLabel() {
           autoComplete="off"
           className={inputClass}
           value={values[key]}
-          onChange={(e) => set(key, e.target.value)}
+          inputMode={opts?.inputMode}
+          onChange={(e) => set(key, opts?.mask ? opts.mask(e.target.value) : e.target.value)}
         />
       )}
     </Field>
@@ -207,6 +245,10 @@ export function WhiteLabel() {
     const next: Record<string, string> = {};
     if (values.company_name.trim().length < 2) next.company_name = "Informe o nome da empresa.";
     if (values.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email.trim())) next.email = "Informe um e-mail válido.";
+    for (const key of ["phone", "whatsapp"] as const) {
+      if (values[key].trim() && !isPhoneComplete(values[key])) next[key] = "Informe DDD e número, ex.: (22) 99999-9999.";
+    }
+    if (values.postal_code.trim() && !isCepComplete(values.postal_code)) next.postal_code = "O CEP deve ter 8 dígitos.";
     for (const key of ["website", "facebook", "instagram", "linkedin", "youtube"] as const) {
       const v = values[key].trim();
       if (v && !/^https?:\/\//i.test(v)) next[key] = "Use o endereço completo, começando com https://";
@@ -317,18 +359,40 @@ export function WhiteLabel() {
               {text("legal_name", "Razão social")}
               {text("cnpj", "CNPJ", { placeholder: "00.000.000/0001-00" })}
               {text("email", "E-mail", { type: "email" })}
-              {text("phone", "Telefone", { placeholder: "(22) 0000-0000" })}
-              {text("whatsapp", "WhatsApp", { hint: "Com DDD, só números ou formatado." })}
+              {text("phone", "Telefone", { placeholder: "(22) 0000-0000", mask: maskPhone, inputMode: "tel" })}
+              {text("whatsapp", "WhatsApp", { placeholder: "(22) 90000-0000", hint: "Com DDD.", mask: maskPhone, inputMode: "tel" })}
             </div>
           </section>
 
           <section className="rounded-[15px] border border-line bg-surface p-5 shadow-sm">
             <h2 className="mb-4 text-base text-navy-900">Localização</h2>
-            <div className="grid gap-4 md:grid-cols-2">
-              {text("address", "Endereço", { className: "md:col-span-2", hint: "Rua, número, complemento e bairro." })}
-              {text("city", "Cidade")}
-              {text("state", "Estado")}
-              {text("postal_code", "CEP")}
+            <div className="grid gap-4 md:grid-cols-6">
+              <Field label="CEP" error={errors.postal_code ?? (cepStatus?.tone === "error" ? cepStatus.text : undefined)} hint={cepStatus?.tone === "info" ? cepStatus.text : undefined} className="md:col-span-2">
+                {(p) => (
+                  <input
+                    {...p}
+                    inputMode="numeric"
+                    maxLength={9}
+                    placeholder="00000-000"
+                    autoComplete="off"
+                    className={inputClass}
+                    value={values.postal_code}
+                    onChange={(e) => {
+                      const masked = maskCep(e.target.value);
+                      set("postal_code", masked);
+                      if (masked.length < 9) setCepStatus(null);
+                      else void lookupCep(masked);
+                    }}
+                    onBlur={() => void lookupCep(values.postal_code)}
+                  />
+                )}
+              </Field>
+              {text("address", "Endereço", { className: "md:col-span-4", hint: "Rua ou avenida. Preenchido pelo CEP." })}
+              {text("number", "Número", { className: "md:col-span-2" })}
+              {text("complement", "Complemento", { className: "md:col-span-4", hint: "Sala, andar, bloco, galpão..." })}
+              {text("neighborhood", "Bairro", { className: "md:col-span-2" })}
+              {text("city", "Cidade", { className: "md:col-span-3" })}
+              {text("state", "Estado", { className: "md:col-span-1" })}
             </div>
           </section>
 
