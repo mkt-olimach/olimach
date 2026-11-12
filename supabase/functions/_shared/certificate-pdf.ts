@@ -1,9 +1,10 @@
-// Gerador do PDF do certificado (A4 retrato, frente e verso). Sem dependencias de runtime alem de
+// Gerador do PDF do certificado (A4 retrato: conteudo na primeira pagina, continuacao do conteudo programatico na segunda). Sem dependencias de runtime alem de
 // pdf-lib e qrcode (mapeadas em supabase/functions/deno.json para Deno e em package.json para os testes).
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import type { PDFFont, PDFPage } from "pdf-lib";
 import QRCode from "qrcode";
 import { LOGO_PNG_BASE64 } from "./logo.ts";
+import { LOGO_GRAY_PNG_BASE64 } from "./logo-gray.ts";
 
 export interface Signer {
   name: string;
@@ -128,7 +129,7 @@ async function drawSigner(doc: PDFDocument, page: PDFPage, signer: Signer | null
   const width = 210;
   if (signer?.signature) {
     const image = signer.signature.type === "png" ? await doc.embedPng(signer.signature.bytes) : await doc.embedJpg(signer.signature.bytes);
-    const scale = Math.min(130 / image.width, 48 / image.height);
+    const scale = Math.min(130 / image.width, 40 / image.height);
     page.drawImage(image, { x: centerX - (image.width * scale) / 2, y: baseY + 4, width: image.width * scale, height: image.height * scale });
   }
   page.drawLine({ start: { x: centerX - width / 2, y: baseY }, end: { x: centerX + width / 2, y: baseY }, thickness: 0.7, color: GRAY });
@@ -158,44 +159,80 @@ export async function buildCertificatePdf(data: CertificateData): Promise<Uint8A
   const regular = await doc.embedFont(StandardFonts.Helvetica);
   const logo = await doc.embedPng(Uint8Array.from(atob(LOGO_PNG_BASE64), (c) => c.charCodeAt(0)));
 
+  const watermark = await doc.embedPng(Uint8Array.from(atob(LOGO_GRAY_PNG_BASE64), (c) => c.charCodeAt(0)));
+  const drawWatermark = (page: PDFPage) => {
+    const width = 470;
+    const height = (watermark.height / watermark.width) * width;
+    page.drawImage(watermark, { x: (PAGE[0] - width) / 2, y: (PAGE[1] - height) / 2, width, height, opacity: 0.07 });
+  };
+
   // ---------------------------------------------------------------- frente
   const front = doc.addPage(PAGE);
+  drawWatermark(front);
   drawFrame(front);
-  const logoHeight = 84;
+
+  // QR + codigo de validacao: canto superior esquerdo
+  const qrSize = 58;
+  const qrX = MARGIN + 6;
+  const qrY = PAGE[1] - 36 - qrSize;
+  drawQr(front, data.validationUrl, qrX, qrY, qrSize);
+  front.drawText("Código de validação", { x: qrX, y: qrY - 10, size: 6.5, font: regular, color: GRAY });
+  front.drawText(toWinAnsi(data.code), { x: qrX, y: qrY - 22, size: 10, font: bold, color: NAVY });
+
+  const logoHeight = 62;
   const logoWidth = (logo.width / logo.height) * logoHeight;
-  front.drawImage(logo, { x: (PAGE[0] - logoWidth) / 2, y: PAGE[1] - 40 - logoHeight, width: logoWidth, height: logoHeight });
+  front.drawImage(logo, { x: (PAGE[0] - logoWidth) / 2, y: PAGE[1] - 38 - logoHeight, width: logoWidth, height: logoHeight });
 
   const textWidth = PAGE[0] - 2 * (MARGIN + 24);
-  drawCentered(front, "CERTIFICADO", PAGE[1] - 190, bold, 30, NAVY, 2);
-  drawCentered(front, "Certificamos que", PAGE[1] - 228, regular, 11, GRAY);
-  const nameSize = fitSize(data.studentName, bold, 24, textWidth, 13);
-  drawCentered(front, data.studentName, PAGE[1] - 260, bold, nameSize, INK);
-  drawCentered(front, `CPF ${data.cpfMasked}`, PAGE[1] - 277, regular, 9, GRAY);
-  drawCentered(front, "concluiu com aproveitamento o treinamento de", PAGE[1] - 306, regular, 11, GRAY);
+  drawCentered(front, "CERTIFICADO", PAGE[1] - 150, bold, 26, NAVY, 2);
+  drawCentered(front, "Certificamos que", PAGE[1] - 178, regular, 10.5, GRAY);
+  const nameSize = fitSize(data.studentName, bold, 22, textWidth, 12);
+  drawCentered(front, data.studentName, PAGE[1] - 204, bold, nameSize, INK);
+  drawCentered(front, `CPF ${data.cpfMasked}`, PAGE[1] - 219, regular, 8.5, GRAY);
+  drawCentered(front, "concluiu com aproveitamento o treinamento de", PAGE[1] - 240, regular, 10.5, GRAY);
 
-  const courseLines = wrapText(data.courseName, bold, 17, textWidth).slice(0, 3);
-  let y = PAGE[1] - 334;
+  const courseLines = wrapText(data.courseName, bold, 16, textWidth).slice(0, 3);
+  let y = PAGE[1] - 262;
   for (const line of courseLines) {
-    drawCentered(front, line, y, bold, fitSize(line, bold, 17, textWidth, 11), NAVY);
-    y -= 21;
+    drawCentered(front, line, y, bold, fitSize(line, bold, 16, textWidth, 11), NAVY);
+    y -= 19;
   }
   const period = data.startDate === data.endDate ? formatDay(data.startDate) : `${formatDay(data.startDate)} a ${formatDay(data.endDate)}`;
   const workload = `carga horária total de ${data.workloadHours} horas (${data.theoryHours} h teóricas e ${data.practiceHours} h práticas)`;
   const detail = `com ${workload}, realizado em ${period}, em ${data.location}.`;
-  const detailLines = wrapText(detail, regular, 10.5, textWidth);
-  y -= 6;
-  for (const line of detailLines) {
-    drawCentered(front, line, y, regular, 10.5, INK);
-    y -= 15;
+  y -= 2;
+  for (const line of wrapText(detail, regular, 10, textWidth)) {
+    drawCentered(front, line, y, regular, 10, INK);
+    y -= 14;
   }
   const validity = data.expiresAt ? `Validade: ${formatDate(data.expiresAt)}` : "Certificado sem prazo de validade definido";
-  drawCentered(front, `Emitido em ${formatDate(data.issuedAt)}  |  ${validity}`, y - 6, regular, 9.5, GRAY);
+  drawCentered(front, `Emitido em ${formatDate(data.issuedAt)}  |  ${validity}`, y - 2, regular, 9, GRAY);
+  y -= 26;
+
+  // Conteudo programatico na primeira pagina; o que nao couber continua na segunda.
+  const bodySize = 8.5;
+  const lineHeight = 11;
+  const lines = wrapText(data.syllabus.trim() || "Conteúdo programático não informado.", regular, bodySize, textWidth);
+  const frontFloor = 268; // acima da grade de assinaturas
+  front.drawText("CONTEÚDO PROGRAMÁTICO", { x: MARGIN + 24, y, size: 9, font: bold, color: NAVY });
+  front.drawLine({ start: { x: MARGIN + 24, y: y - 4 }, end: { x: PAGE[0] - MARGIN - 24, y: y - 4 }, thickness: 0.6, color: ORANGE });
+  y -= 18;
+  let index = 0;
+  while (index < lines.length && y > frontFloor) {
+    const line = lines[index] ?? "";
+    if (line) front.drawText(line, { x: MARGIN + 24, y, size: bodySize, font: regular, color: INK });
+    y -= lineHeight;
+    index++;
+  }
+  if (index < lines.length) {
+    front.drawText("Continua na página seguinte.", { x: MARGIN + 24, y: frontFloor - 6, size: 7.5, font: regular, color: GRAY });
+  }
 
   // Quatro campos de assinatura em grade 2x2: aluno (em branco, com o nome abaixo) e as tres padrao.
   const leftX = PAGE[0] / 4 + 6;
   const rightX = (PAGE[0] * 3) / 4 - 6;
-  const rowTop = 330;
-  const rowBottom = 215;
+  const rowTop = 196;
+  const rowBottom = 92;
   const student: Signer = { name: data.studentName, qualification: `CPF ${data.cpfMasked}`, registry: "", signature: null };
   await drawSigner(doc, front, student, leftX, rowTop, bold, regular, "Aluno");
   const standard = data.signers.slice(0, 3);
@@ -209,42 +246,26 @@ export async function buildCertificatePdf(data: CertificateData): Promise<Uint8A
     const spot = spots[i];
     if (item && spot) await drawSigner(doc, front, item.signer, spot[0], spot[1], bold, regular, item.role);
   }
+  drawCentered(front, toWinAnsi(`${data.companyName}  |  CNPJ ${data.companyCnpj}`), 30, regular, 8, GRAY);
 
-  // QR + codigo (canto inferior esquerdo)
-  const qrSize = 66;
-  const qrX = MARGIN + 14;
-  const qrY = 70;
-  drawQr(front, data.validationUrl, qrX, qrY, qrSize);
-  front.drawText("Código de validação", { x: qrX + qrSize + 10, y: qrY + 50, size: 7, font: regular, color: GRAY });
-  front.drawText(toWinAnsi(data.code), { x: qrX + qrSize + 10, y: qrY + 34, size: 14, font: bold, color: NAVY });
-  const urlLines = wrapText(data.validationUrl, regular, 6.5, 260);
-  urlLines.slice(0, 3).forEach((line, i) => front.drawText(line, { x: qrX + qrSize + 10, y: qrY + 22 - i * 8, size: 6.5, font: regular, color: GRAY }));
-
-  drawCentered(front, toWinAnsi(`${data.companyName}  |  CNPJ ${data.companyCnpj}`), 28, regular, 8, GRAY);
-
-  // ----------------------------------------------------------------- verso
-  const bodySize = 10;
-  const lineHeight = 14;
-  const backWidth = PAGE[0] - MARGIN * 2 - 40;
-  const lines = wrapText(data.syllabus.trim() || "Conteúdo programático não informado.", regular, bodySize, backWidth);
-  let index = 0;
-  let pageNumber = 0;
-  while (index < lines.length || pageNumber === 0) {
-    const back = doc.addPage(PAGE);
+  // ------------------------------------------------- segunda pagina (so se sobrar conteudo)
+  let pageNumber = 1;
+  while (index < lines.length) {
+    const next = doc.addPage(PAGE);
     pageNumber++;
-    drawFrame(back);
-    back.drawText("CONTEÚDO PROGRAMÁTICO", { x: MARGIN + 20, y: PAGE[1] - 66, size: 15, font: bold, color: NAVY });
-    back.drawText(toWinAnsi(wrapText(data.courseName, regular, 10, backWidth)[0] ?? ""), { x: MARGIN + 20, y: PAGE[1] - 84, size: 10, font: regular, color: GRAY });
-    back.drawLine({ start: { x: MARGIN + 20, y: PAGE[1] - 94 }, end: { x: PAGE[0] - MARGIN - 20, y: PAGE[1] - 94 }, thickness: 0.7, color: ORANGE });
+    drawWatermark(next);
+    drawFrame(next);
+    next.drawText("CONTEÚDO PROGRAMÁTICO (continuação)", { x: MARGIN + 24, y: PAGE[1] - 66, size: 14, font: bold, color: NAVY });
+    next.drawText(toWinAnsi(wrapText(data.courseName, regular, 10, textWidth)[0] ?? ""), { x: MARGIN + 24, y: PAGE[1] - 84, size: 10, font: regular, color: GRAY });
+    next.drawLine({ start: { x: MARGIN + 24, y: PAGE[1] - 94 }, end: { x: PAGE[0] - MARGIN - 24, y: PAGE[1] - 94 }, thickness: 0.7, color: ORANGE });
     let ty = PAGE[1] - 116;
     while (index < lines.length && ty > 70) {
       const line = lines[index] ?? "";
-      if (line) back.drawText(line, { x: MARGIN + 20, y: ty, size: bodySize, font: regular, color: INK });
-      ty -= lineHeight;
+      if (line) next.drawText(line, { x: MARGIN + 24, y: ty, size: 10, font: regular, color: INK });
+      ty -= 14;
       index++;
     }
-    back.drawText(toWinAnsi(`Certificado ${data.code}  |  página ${pageNumber} do verso`), { x: MARGIN + 20, y: 34, size: 8, font: regular, color: GRAY });
-    if (index >= lines.length) break;
+    next.drawText(toWinAnsi(`Certificado ${data.code}  |  página ${pageNumber}`), { x: MARGIN + 24, y: 34, size: 8, font: regular, color: GRAY });
   }
 
   return doc.save();
