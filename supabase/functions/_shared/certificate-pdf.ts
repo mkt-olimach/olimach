@@ -142,14 +142,14 @@ async function drawSigner(doc: PDFDocument, page: PDFPage, signer: Signer | null
     }
   }
   texts.push({ text: role, font: bold, size: 7.5, color: NAVY });
-  let ty = lineY + 34 + 10 * (texts.length - 1);
+  let ty = lineY + 50 + 10 * (texts.length - 1);
   for (const t of texts) {
     draw(t.text, ty, t.font, t.size, t.color);
     ty -= 10;
   }
   if (signer?.signature) {
     const image = signer.signature.type === "png" ? await doc.embedPng(signer.signature.bytes) : await doc.embedJpg(signer.signature.bytes);
-    const scale = Math.min(130 / image.width, 30 / image.height);
+    const scale = Math.min(180 / image.width, 46 / image.height);
     page.drawImage(image, { x: centerX - (image.width * scale) / 2, y: lineY + 1, width: image.width * scale, height: image.height * scale });
   }
   page.drawLine({ start: { x: centerX - width / 2, y: lineY }, end: { x: centerX + width / 2, y: lineY }, thickness: 0.7, color: GRAY });
@@ -213,7 +213,7 @@ export async function buildCertificatePdf(data: CertificateData): Promise<Uint8A
   const refLines = refText ? wrapText(refText, regular, 8, textWidth) : [];
   // bloco de carga horaria, referencia tecnica e datas (altura) + margem acima da grade de assinaturas
   const infoHeight = 14 + (refLines.length ? refLines.length * 10 + 8 : 0) + 26 + 14 + 10;
-  const frontFloor = 300 + infoHeight;
+  const frontFloor = 318 + infoHeight;
   front.drawText("CONTEÚDO:", { x: left, y, size: 9, font: bold, color: INK });
   y -= 14;
   let index = 0;
