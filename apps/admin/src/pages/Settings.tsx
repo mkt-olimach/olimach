@@ -2,11 +2,12 @@ import { cn } from "@olimach/ui";
 import { useState } from "react";
 import { ActivityTab } from "../components/settings/ActivityTab";
 import { AccountTab } from "../components/settings/AccountTab";
+import { SignersTab } from "../components/settings/SignersTab";
 import { TeamTab } from "../components/settings/TeamTab";
 import { PageHeader } from "../components/ui";
 import { useAuth } from "../lib/auth";
 
-type Tab = "account" | "team" | "activity";
+type Tab = "account" | "signers" | "team" | "activity";
 
 export function Settings() {
   const { profile } = useAuth();
@@ -16,6 +17,7 @@ export function Settings() {
     { id: "account", label: "Minha conta" },
     ...(isAdmin
       ? ([
+          { id: "signers", label: "Assinaturas do certificado" },
           { id: "team", label: "Equipe" },
           { id: "activity", label: "Log de atividades" },
         ] as Array<{ id: Tab; label: string }>)
@@ -24,7 +26,7 @@ export function Settings() {
 
   return (
     <div>
-      <PageHeader title="Configurações" description="Sua conta, a equipe com acesso ao painel e o registro de atividades." />
+      <PageHeader title="Configurações" description="Sua conta, as assinaturas do certificado, a equipe com acesso ao painel e o registro de atividades." />
       <div role="tablist" aria-label="Configurações" className="mb-4 flex flex-wrap gap-1.5">
         {tabs.map((t) => (
           <button
@@ -40,6 +42,7 @@ export function Settings() {
         ))}
       </div>
       {tab === "account" && <AccountTab />}
+      {tab === "signers" && isAdmin && <SignersTab />}
       {tab === "team" && isAdmin && <TeamTab />}
       {tab === "activity" && isAdmin && <ActivityTab />}
     </div>

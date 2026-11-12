@@ -33,7 +33,10 @@ const courseFields = {
     .string()
     .regex(/^NR-\d{1,2}$/, "Use o formato NR-35")
     .nullable(),
+  /** Total = teorica + pratica (o banco impoe a soma). */
   workload_hours: z.number({ invalid_type_error: "Informe a carga horaria" }).int("Use horas inteiras").positive("A carga horaria deve ser maior que zero"),
+  theory_hours: z.number({ invalid_type_error: "Informe a carga horaria teorica" }).int("Use horas inteiras").min(0, "Use zero ou mais horas"),
+  practice_hours: z.number({ invalid_type_error: "Informe a carga horaria pratica" }).int("Use horas inteiras").min(0, "Use zero ou mais horas"),
   syllabus: z.string(),
   /** Texto de divulgacao exibido na landing. */
   description: z.string().trim().max(1000, "Use no maximo 1000 caracteres").default(""),
@@ -43,6 +46,10 @@ const courseFields = {
   validity_months: z.number().int().positive("A validade deve ser maior que zero").nullable(),
   active: z.boolean(),
 };
+const workloadIsSum = {
+  check: (c: { workload_hours: number; theory_hours: number; practice_hours: number }) => c.workload_hours === c.theory_hours + c.practice_hours,
+  message: "A carga horaria total deve ser a soma da teorica e da pratica",
+};
 const nrCodeMatchesCategory = {
   check: (c: { category: CourseCategory; nr_code: string | null }) => (c.category === "nr") === (c.nr_code !== null),
   message: "Informe o codigo da NR (ex.: NR-35) somente para cursos de NR",
@@ -50,12 +57,14 @@ const nrCodeMatchesCategory = {
 
 export const courseInputSchema = z
   .object(courseFields)
-  .refine(nrCodeMatchesCategory.check, { message: nrCodeMatchesCategory.message, path: ["nr_code"] });
+  .refine(nrCodeMatchesCategory.check, { message: nrCodeMatchesCategory.message, path: ["nr_code"] })
+  .refine(workloadIsSum.check, { message: workloadIsSum.message, path: ["workload_hours"] });
 export type CourseInput = z.infer<typeof courseInputSchema>;
 
 export const courseSchema = z
   .object({ id: uuid, ...courseFields })
-  .refine(nrCodeMatchesCategory.check, { message: nrCodeMatchesCategory.message, path: ["nr_code"] });
+  .refine(nrCodeMatchesCategory.check, { message: nrCodeMatchesCategory.message, path: ["nr_code"] })
+  .refine(workloadIsSum.check, { message: workloadIsSum.message, path: ["workload_hours"] });
 export type Course = z.infer<typeof courseSchema>;
 
 /** Linha devolvida por public.public_courses(): so campos de divulgacao de treinamentos ativos. */
@@ -65,6 +74,8 @@ export const publicCourseSchema = z.object({
   category: courseCategorySchema,
   nr_code: z.string().nullable(),
   workload_hours: z.number(),
+  theory_hours: z.number(),
+  practice_hours: z.number(),
   modality: courseModalitySchema,
   description: z.string(),
   cover_path: z.string().nullable(),

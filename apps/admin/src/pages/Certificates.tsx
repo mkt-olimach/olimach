@@ -25,9 +25,7 @@ interface Eligible {
 function IssueDialog({ presetEnrollment, onIssued, onClose }: { presetEnrollment: string | null; onIssued: () => void; onClose: () => void }) {
   const toast = useToast();
   const [eligible, setEligible] = useState<Eligible[] | null>(null);
-  const [leads, setLeads] = useState<Array<{ id: string; name: string; registry: string }>>([]);
   const [enrollmentId, setEnrollmentId] = useState(presetEnrollment ?? "");
-  const [leadId, setLeadId] = useState("");
   const [query, setQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -49,15 +47,6 @@ function IssueDialog({ presetEnrollment, onIssued, onClose }: { presetEnrollment
         const rows = (data as unknown as Eligible[]).filter((e) => e.class?.course?.category !== "parceria" && !e.certificates.some((c) => c.status === "valid"));
         setEligible(rows);
       });
-    void supabase
-      .from("technical_leads")
-      .select("id, name, registry")
-      .order("name")
-      .then(({ data }) => {
-        const list = (data ?? []) as typeof leads;
-        setLeads(list);
-        if (list.length === 1 && list[0]) setLeadId(list[0].id);
-      });
   }, []);
 
   const visible = useMemo(() => {
@@ -74,11 +63,10 @@ function IssueDialog({ presetEnrollment, onIssued, onClose }: { presetEnrollment
     event.preventDefault();
     if (!supabase) return;
     if (!enrollmentId) return setError("Escolha o aluno e a turma.");
-    if (!leadId) return setError("Escolha o responsável técnico.");
     setError(null);
     setBusy(true);
     const { data, error: err } = await supabase.functions.invoke<{ code: string }>("issue-certificate", {
-      body: { enrollment_id: enrollmentId, technical_lead_id: leadId },
+      body: { enrollment_id: enrollmentId },
     });
     setBusy(false);
     if (err || !data) {
@@ -130,18 +118,9 @@ function IssueDialog({ presetEnrollment, onIssued, onClose }: { presetEnrollment
           )}
         </Field>
 
-        <Field label="Responsável técnico" hint="Nome e registro saem no certificado.">
-          {(p) => (
-            <select {...p} className={inputClass} value={leadId} onChange={(e) => setLeadId(e.target.value)}>
-              <option value="">Selecione...</option>
-              {leads.map((l) => (
-                <option key={l.id} value={l.id}>
-                  {l.name} ({l.registry})
-                </option>
-              ))}
-            </select>
-          )}
-        </Field>
+        <p className="rounded-btn-admin bg-canvas p-3 text-xs text-muted">
+          O certificado sai com o campo de assinatura do aluno e as assinaturas padrão (engenheiro técnico, diretoria e técnico em segurança), configuradas em Configurações.
+        </p>
 
         {error && (
           <p role="alert" className="rounded-btn-admin bg-danger/10 p-3 text-sm text-danger">
