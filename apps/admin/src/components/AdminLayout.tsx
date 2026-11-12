@@ -5,6 +5,7 @@ import {
   CalendarDays,
   ChartNoAxesColumn,
   FileText,
+  Images,
   Home,
   LogOut,
   Menu,
@@ -21,6 +22,7 @@ import type { FormEvent } from "react";
 import { NavLink, Navigate, Outlet, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { isSuperAdminRole, roleLabel, useAuth } from "../lib/auth";
 import { initials } from "../lib/certificates";
+import { useCompany } from "../lib/company";
 
 const nav: Array<{ to: string; label: string; icon: LucideIcon; end?: boolean }> = [
   { to: "/", label: "Início", icon: Home, end: true },
@@ -29,6 +31,7 @@ const nav: Array<{ to: string; label: string; icon: LucideIcon; end?: boolean }>
   { to: "/turmas", label: "Turmas", icon: CalendarDays },
   { to: "/certificados", label: "Certificados", icon: FileText },
   { to: "/instrutores", label: "Instrutores", icon: UserCog },
+  { to: "/galeria", label: "Galeria", icon: Images },
   { to: "/relatorios", label: "Relatórios", icon: ChartNoAxesColumn },
   { to: "/configuracoes", label: "Configurações", icon: Settings2 },
 ];
@@ -69,6 +72,7 @@ function GlobalSearch() {
 /** Layout protegido: exige sessao e perfil ativo (a autorizacao real e a RLS no banco). */
 export function AdminLayout() {
   const { loading, session, profile, recovery, signOut } = useAuth();
+  const { company } = useCompany();
   const { pathname } = useLocation();
   const [drawerOpen, setDrawerOpen] = useState(false);
 
@@ -100,7 +104,7 @@ export function AdminLayout() {
           )}
         >
           <div className="mb-8 flex items-center justify-between px-2">
-            <BrandLogo className="h-24 w-auto" />
+            <BrandLogo src={company.logoUrl ?? undefined} name={company.name} className="h-24 w-auto" />
             <button
               type="button"
               className="rounded-btn-admin p-2 text-muted md:hidden"
@@ -130,7 +134,7 @@ export function AdminLayout() {
           </nav>
 
           <div className="relative mt-auto hidden min-h-[230px] overflow-hidden rounded-[13px] border border-line bg-canvas p-6 md:block">
-            <p className="relative z-10 text-sm font-extrabold text-navy-900">OLIMACH</p>
+            <p className="relative z-10 text-sm font-extrabold uppercase text-navy-900">{company.name}</p>
             <p className="relative z-10 mt-2 max-w-[150px] text-[13px] text-[#5b6d86]">Segurança que leva mais longe.</p>
             <img
               src="/assets/images/platform-card.webp"

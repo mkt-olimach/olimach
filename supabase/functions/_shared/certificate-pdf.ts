@@ -37,6 +37,11 @@ export interface CertificateData {
   signers: Array<{ role: string; signer: Signer }>;
   companyName: string;
   companyCnpj: string;
+  /** Logo e logo em cinza (marca d'agua) do White Label. Sem elas, usa a logo padrao. */
+  companyLogo?: { bytes: Uint8Array; type: "png" | "jpg" } | null;
+  companyLogoGray?: { bytes: Uint8Array; type: "png" | "jpg" } | null;
+  /** Endereco, telefone, e-mail e site para o rodape (uma linha; pode ser vazio). */
+  companyContact?: string;
   validationUrl: string;
 }
 
@@ -167,9 +172,19 @@ export async function buildCertificatePdf(data: CertificateData): Promise<Uint8A
   doc.setProducer("Olimach");
   const bold = await doc.embedFont(StandardFonts.HelveticaBold);
   const regular = await doc.embedFont(StandardFonts.Helvetica);
-  const logo = await doc.embedPng(Uint8Array.from(atob(LOGO_PNG_BASE64), (c) => c.charCodeAt(0)));
+  const embedImage = async (image: { bytes: Uint8Array; type: "png" | "jpg" } | null | undefined) => {
+    if (!image) return null;
+    try {
+      return image.type === "png" ? await doc.embedPng(image.bytes) : await doc.embedJpg(image.bytes);
+    } catch {
+      return null; // imagem invalida: cai na logo padrao
+    }
+  };
+  const customLogo = await embedImage(data.companyLogo);
+  const logo = customLogo ?? (await doc.embedPng(Uint8Array.from(atob(LOGO_PNG_BASE64), (c) => c.charCodeAt(0))));
 
-  const watermark = await doc.embedPng(Uint8Array.from(atob(LOGO_GRAY_PNG_BASE64), (c) => c.charCodeAt(0)));
+  const watermark =
+    (await embedImage(data.companyLogoGray)) ?? customLogo ?? (await doc.embedPng(Uint8Array.from(atob(LOGO_GRAY_PNG_BASE64), (c) => c.charCodeAt(0))));
   const drawWatermark = (page: PDFPage) => {
     const width = 470;
     const height = (watermark.height / watermark.width) * width;
@@ -279,8 +294,13 @@ export async function buildCertificatePdf(data: CertificateData): Promise<Uint8A
   await drawSigner(doc, front, student, rightX, rowBottom, bold, regular, "Assinatura do aluno");
 
   front.drawLine({ start: { x: left - 14, y: 64 }, end: { x: right + 14, y: 64 }, thickness: 0.6, color: GRAY });
-  drawCentered(front, toWinAnsi(`${data.companyName}  |  CNPJ ${data.companyCnpj}`), 50, regular, 8, GRAY);
-  drawCentered(front, toWinAnsi(`Valide em ${data.validationUrl}`), 39, regular, 7, GRAY);
+  drawCentered(front, toWinAnsi(`${data.companyName}  |  CNPJ ${data.companyCnpj}`), 52, regular, 8, GRAY);
+  const contact = (data.companyContact ?? "").trim();
+  if (contact) {
+    const size = fitSize(contact, regular, 7.5, PAGE[0] - 2 * (MARGIN + 6), 6);
+    drawCentered(front, contact, 42, regular, size, GRAY);
+  }
+  drawCentered(front, toWinAnsi(`Valide em ${data.validationUrl}`), 32, regular, 7, GRAY);
 
   // ------------------------------------------------- segunda pagina (so se sobrar conteudo)
   let pageNumber = 1;

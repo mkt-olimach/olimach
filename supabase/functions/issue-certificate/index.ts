@@ -1,6 +1,7 @@
 // Edge Function: emite o certificado (gera o PDF, grava no Storage privado e cria o registro).
 // Roda como o usuario que chamou (JWT repassado): RLS e triggers do banco continuam valendo, sem service_role.
-// Segredos: SITE_URL, COMPANY_LEGAL_NAME, COMPANY_CNPJ (ver docs/OPERATIONS.md). SUPABASE_URL e SUPABASE_ANON_KEY
+// Dados da empresa: modulo White Label (company_settings); segredos SITE_URL, COMPANY_LEGAL_NAME e COMPANY_CNPJ
+// servem de reserva (ver docs/OPERATIONS.md). SUPABASE_URL e SUPABASE_ANON_KEY
 // ja existem no ambiente das Edge Functions.
 import { createClient } from "@supabase/supabase-js";
 import { addMonths, buildCertificatePdf, sha256Hex } from "../_shared/certificate-pdf.ts";
@@ -28,11 +29,11 @@ function maskCpf(value: string): string {
 type Client = ReturnType<typeof createClient>;
 
 /** Baixa a imagem da assinatura (so PNG ou JPG; pdf-lib nao le WebP). Falha vira "sem assinatura". */
-async function loadSignature(client: Client, path: string | null): Promise<Signer["signature"]> {
+async function loadImage(client: Client, bucket: string, path: string | null): Promise<Signer["signature"]> {
   if (!path) return null;
   const type = /\.png$/i.test(path) ? "png" : /\.jpe?g$/i.test(path) ? "jpg" : null;
   if (!type) return null;
-  const { data, error } = await client.storage.from("signatures").download(path);
+  const { data, error } = await client.storage.from(bucket).download(path);
   if (error || !data) return null;
   return { bytes: new Uint8Array(await data.arrayBuffer()), type };
 }
@@ -52,7 +53,7 @@ async function toSigner(client: Client, person: Person): Promise<Signer> {
     name: person.name,
     qualification: person.qualification,
     registry: person.registry,
-    signature: await loadSignature(client, person.signature_path),
+    signature: await loadImage(client, "signatures", person.signature_path),
     adjust: { x: person.sig_offset_x ?? 0, y: person.sig_offset_y ?? 0, scale: person.sig_scale ?? 1 },
   };
 }
@@ -63,13 +64,6 @@ Deno.serve(async (request) => {
 
   const authorization = request.headers.get("Authorization");
   if (!authorization) return fail(401, "unauthorized", "Sessão ausente. Entre novamente.");
-
-  const siteUrl = (Deno.env.get("SITE_URL") ?? "").replace(/\/$/, "");
-  const companyName = Deno.env.get("COMPANY_LEGAL_NAME") ?? "";
-  const companyCnpj = Deno.env.get("COMPANY_CNPJ") ?? "";
-  if (!siteUrl || !companyName || !companyCnpj) {
-    return fail(422, "not_configured", "Configure SITE_URL, COMPANY_LEGAL_NAME e COMPANY_CNPJ nos segredos da função antes de emitir.");
-  }
 
   let body: { enrollment_id?: string };
   try {
@@ -85,6 +79,26 @@ Deno.serve(async (request) => {
     global: { headers: { Authorization: authorization } },
     auth: { persistSession: false },
   });
+
+  // Dados da empresa: modulo White Label primeiro; segredos da funcao (SITE_URL, COMPANY_*) como reserva.
+  const { data: company } = await client
+    .from("company_settings")
+    .select("company_name, legal_name, cnpj, phone, email, website, address, number, complement, neighborhood, city, state, postal_code, logo_path, logo_gray_path")
+    .maybeSingle();
+  const companyName = (company?.legal_name || company?.company_name || Deno.env.get("COMPANY_LEGAL_NAME") || "").trim();
+  const companyCnpj = (company?.cnpj || Deno.env.get("COMPANY_CNPJ") || "").trim();
+  const siteUrl = (Deno.env.get("SITE_URL") || company?.website || "").trim().replace(/\/$/, "");
+  if (!siteUrl || !companyName || !companyCnpj) {
+    return fail(422, "not_configured", "Informe razão social, CNPJ e site da empresa no módulo White Label (ou os segredos SITE_URL, COMPANY_LEGAL_NAME e COMPANY_CNPJ) antes de emitir.");
+  }
+  const join = (parts: Array<string | null | undefined>, sep: string) => parts.map((p) => (p ?? "").trim()).filter(Boolean).join(sep);
+  const street = join([join([company?.address, company?.number], ", "), company?.complement], " - ");
+  const companyContact = join(
+    [join([join([street, company?.neighborhood], " - "), join([company?.city, company?.state], "/"), company?.postal_code ? `CEP ${company.postal_code}` : ""], " - "), company?.phone, company?.email, company?.website],
+    "  |  ",
+  );
+  const companyLogo = await loadImage(client, "branding", company?.logo_path ?? null);
+  const companyLogoGray = await loadImage(client, "branding", company?.logo_gray_path ?? null);
 
   // Matricula com turma, curso, aluno e instrutores. A RLS so devolve dados para a equipe.
   const { data: enrollment, error: enrollmentError } = await client
@@ -160,6 +174,9 @@ Deno.serve(async (request) => {
       signers,
       companyName,
       companyCnpj,
+      companyLogo,
+      companyLogoGray,
+      companyContact,
       validationUrl: `${siteUrl}/validar/${code}`,
     });
   } catch (error) {

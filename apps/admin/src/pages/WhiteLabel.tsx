@@ -5,12 +5,14 @@ import type { FormEvent } from "react";
 import { Navigate } from "react-router-dom";
 import { Field, PageHeader, dbErrorMessage, inputClass } from "../components/ui";
 import { isSuperAdminRole, useAuth } from "../lib/auth";
+import { useCompany } from "../lib/company";
 import { isCepComplete, isPhoneComplete, maskCep, maskPhone, onlyDigits } from "../lib/masks";
 import { supabase } from "../lib/supabase";
 import { useToast } from "../lib/toast";
 
 const BUCKET = "branding";
-const LOGO_TYPES: Record<string, string> = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp" };
+// PNG e JPG: sao os formatos que o gerador do PDF do certificado le.
+const LOGO_TYPES: Record<string, string> = { "image/png": "png", "image/jpeg": "jpg" };
 const FAVICON_TYPES: Record<string, string> = { "image/png": "png", "image/webp": "webp", "image/x-icon": "ico", "image/vnd.microsoft.icon": "ico" };
 const LOGO_MAX = 2 * 1024 * 1024;
 const FAVICON_MAX = 512 * 1024;
@@ -23,6 +25,7 @@ interface CompanyRow {
   whatsapp: string;
   email: string;
   website: string;
+  business_hours: string;
   address: string;
   number: string;
   complement: string;
@@ -35,14 +38,15 @@ interface CompanyRow {
   linkedin: string;
   youtube: string;
   logo_path: string | null;
+  logo_gray_path: string | null;
   favicon_path: string | null;
 }
 
-const TEXT_FIELDS = ["company_name", "legal_name", "cnpj", "phone", "whatsapp", "email", "website", "address", "number", "complement", "neighborhood", "city", "state", "postal_code", "facebook", "instagram", "linkedin", "youtube"] as const;
+const TEXT_FIELDS = ["company_name", "legal_name", "cnpj", "phone", "whatsapp", "email", "website", "business_hours", "address", "number", "complement", "neighborhood", "city", "state", "postal_code", "facebook", "instagram", "linkedin", "youtube"] as const;
 type TextField = (typeof TEXT_FIELDS)[number];
 type Values = Record<TextField, string>;
 
-const COLUMNS = [...TEXT_FIELDS, "logo_path", "favicon_path"].join(", ");
+const COLUMNS = [...TEXT_FIELDS, "logo_path", "logo_gray_path", "favicon_path"].join(", ");
 const blank: Values = Object.fromEntries(TEXT_FIELDS.map((f) => [f, ""])) as Values;
 
 const LIMITS: Record<TextField, number> = {
@@ -53,6 +57,7 @@ const LIMITS: Record<TextField, number> = {
   whatsapp: 40,
   email: 160,
   website: 200,
+  business_hours: 160,
   address: 200,
   number: 20,
   complement: 80,
@@ -69,6 +74,37 @@ const LIMITS: Record<TextField, number> = {
 function publicUrl(path: string | null): string | null {
   if (!path || !supabase) return null;
   return supabase.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
+}
+
+/** Gera a versao em escala de cinza da logo (PNG com transparencia), usada como marca d'agua no certificado. */
+async function makeGrayLogo(file: File): Promise<Blob | null> {
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const el = new Image();
+      el.onload = () => resolve(el);
+      el.onerror = reject;
+      el.src = url;
+    });
+    const scale = Math.min(1, 700 / img.naturalWidth);
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
+    canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return null;
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    const data = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    for (let i = 0; i < data.data.length; i += 4) {
+      const gray = Math.round(0.299 * data.data[i]! + 0.587 * data.data[i + 1]! + 0.114 * data.data[i + 2]!);
+      data.data[i] = data.data[i + 1] = data.data[i + 2] = gray;
+    }
+    ctx.putImageData(data, 0, 0);
+    return await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png"));
+  } catch {
+    return null;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
 }
 
 /** Campo de imagem com previa, troca e remocao. O arquivo so sobe ao salvar. */
@@ -147,6 +183,7 @@ function ImagePicker({
 export function WhiteLabel() {
   const { profile, loading } = useAuth();
   const toast = useToast();
+  const { reload: reloadCompany } = useCompany();
   const [values, setValues] = useState<Values>(blank);
   const [row, setRow] = useState<CompanyRow | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -258,6 +295,7 @@ export function WhiteLabel() {
     setBusy(true);
 
     let logoPath = removeLogo ? null : (row?.logo_path ?? null);
+    let logoGrayPath = removeLogo ? null : (row?.logo_gray_path ?? null);
     let faviconPath = removeFavicon ? null : (row?.favicon_path ?? null);
     const uploaded: string[] = [];
     if (logoFile) {
@@ -268,6 +306,17 @@ export function WhiteLabel() {
       }
       uploaded.push(path);
       logoPath = path;
+      // versao em cinza para a marca d'agua do certificado (se falhar, o certificado usa a logo no lugar)
+      const gray = await makeGrayLogo(logoFile);
+      logoGrayPath = null;
+      if (gray) {
+        const grayPath = `logo-gray-${Date.now()}.png`;
+        const { error: grayError } = await supabase.storage.from(BUCKET).upload(grayPath, gray, { contentType: "image/png", cacheControl: "31536000" });
+        if (!grayError) {
+          uploaded.push(grayPath);
+          logoGrayPath = grayPath;
+        }
+      }
     }
     if (faviconFile) {
       const path = await upload(faviconFile, "favicon", FAVICON_TYPES);
@@ -280,7 +329,7 @@ export function WhiteLabel() {
       faviconPath = path;
     }
 
-    const payload = { singleton: true, ...Object.fromEntries(TEXT_FIELDS.map((f) => [f, values[f].trim()])), logo_path: logoPath, favicon_path: faviconPath, updated_at: new Date().toISOString() };
+    const payload = { singleton: true, ...Object.fromEntries(TEXT_FIELDS.map((f) => [f, values[f].trim()])), logo_path: logoPath, logo_gray_path: logoGrayPath, favicon_path: faviconPath, updated_at: new Date().toISOString() };
     const { error } = await supabase.from("company_settings").upsert(payload);
     if (error) {
       if (uploaded.length) await supabase.storage.from(BUCKET).remove(uploaded);
@@ -288,11 +337,11 @@ export function WhiteLabel() {
       return void toast.error(dbErrorMessage(error, {}));
     }
     // remove os arquivos substituidos
-    const stale = [row?.logo_path !== logoPath ? row?.logo_path : null, row?.favicon_path !== faviconPath ? row?.favicon_path : null].filter((p): p is string => Boolean(p));
+    const stale = [row?.logo_path !== logoPath ? row?.logo_path : null, row?.logo_gray_path !== logoGrayPath ? row?.logo_gray_path : null, row?.favicon_path !== faviconPath ? row?.favicon_path : null].filter((p): p is string => Boolean(p));
     if (stale.length) await supabase.storage.from(BUCKET).remove(stale);
     setBusy(false);
     toast.success("Dados da empresa salvos.");
-    await load();
+    await Promise.all([load(), reloadCompany()]);
   }
 
   return (
@@ -307,7 +356,7 @@ export function WhiteLabel() {
             <div className="grid gap-6 md:grid-cols-2">
               <ImagePicker
                 label="Logo"
-                hint="PNG, JPG ou WebP, até 2 MB. Fundo transparente funciona melhor."
+                hint="PNG ou JPG, até 2 MB. PNG com fundo transparente funciona melhor. Também é usada no certificado."
                 types={LOGO_TYPES}
                 maxBytes={LOGO_MAX}
                 currentUrl={publicUrl(row?.logo_path ?? null)}
@@ -360,6 +409,7 @@ export function WhiteLabel() {
               {text("cnpj", "CNPJ", { placeholder: "00.000.000/0001-00" })}
               {text("email", "E-mail", { type: "email" })}
               {text("phone", "Telefone", { placeholder: "(22) 0000-0000", mask: maskPhone, inputMode: "tel" })}
+              {text("business_hours", "Horário de atendimento", { className: "md:col-span-2", hint: "Ex.: Seg a sex 08h às 17h30, sáb 08h às 12h30." })}
               {text("whatsapp", "WhatsApp", { placeholder: "(22) 90000-0000", hint: "Com DDD.", mask: maskPhone, inputMode: "tel" })}
             </div>
           </section>

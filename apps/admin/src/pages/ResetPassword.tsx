@@ -3,10 +3,12 @@ import { BrandLogo, Button, Card } from "@olimach/ui";
 import { useState } from "react";
 import type { FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { useCompany } from "../lib/company";
 import { useAuth } from "../lib/auth";
 
 /** Destino do link de recuperacao enviado por e-mail. O supabase-js troca o token do link por uma sessao. */
 export function ResetPassword() {
+  const { company } = useCompany();
   const { loading, session, configured, updatePassword, signOut } = useAuth();
   const navigate = useNavigate();
   const [password, setPassword] = useState("");
@@ -43,7 +45,7 @@ export function ResetPassword() {
   return (
     <div className="flex min-h-screen items-center justify-center p-4">
       <Card className="w-full max-w-sm p-6">
-        <BrandLogo className="h-28 w-auto" />
+        <BrandLogo src={company.logoUrl ?? undefined} name={company.name} className="h-28 w-auto" />
         <h1 className="mt-6 text-2xl">Nova senha</h1>
 
         {loading ? (

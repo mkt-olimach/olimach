@@ -55,6 +55,17 @@ describe("certificate-pdf", () => {
     expect(doc.getPageCount()).toBe(1);
   });
 
+  it("usa logo, marca d\'agua e contatos da empresa (White Label) e ignora imagem invalida", async () => {
+    const custom = await PDFDocument.load(
+      await buildCertificatePdf(
+        sample({ companyLogo: { bytes: PNG_1PX, type: "png" }, companyLogoGray: { bytes: PNG_1PX, type: "png" }, companyContact: "Rua A, 10 - Centro - Macaé/RJ  |  (22) 2762-1234  |  contato@empresa.com.br" }),
+      ),
+    );
+    expect(custom.getPageCount()).toBe(1);
+    const broken = await PDFDocument.load(await buildCertificatePdf(sample({ companyLogo: { bytes: new Uint8Array([1, 2, 3]), type: "png" }, companyLogoGray: { bytes: new Uint8Array([1, 2, 3]), type: "jpg" } })));
+    expect(broken.getPageCount()).toBe(1);
+  });
+
   it("aceita certificado sem validade e sem assinaturas", async () => {
     const bytes = await buildCertificatePdf(
       sample({ expiresAt: null, signers: [] }),

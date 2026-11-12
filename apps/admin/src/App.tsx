@@ -5,6 +5,7 @@ import { ClassDetail } from "./pages/ClassDetail";
 import { Classes } from "./pages/Classes";
 import { Courses } from "./pages/Courses";
 import { Dashboard } from "./pages/Dashboard";
+import { Gallery } from "./pages/Gallery";
 import { Login } from "./pages/Login";
 import { People } from "./pages/People";
 import { Reports } from "./pages/Reports";
@@ -26,6 +27,7 @@ export function App() {
         <Route path="/turmas/:id" element={<ClassDetail />} />
         <Route path="/certificados" element={<Certificates />} />
         <Route path="/instrutores" element={<People />} />
+        <Route path="/galeria" element={<Gallery />} />
         <Route path="/relatorios" element={<Reports />} />
         <Route path="/configuracoes" element={<Settings />} />
         <Route path="/white-label" element={<WhiteLabel />} />
