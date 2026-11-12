@@ -662,13 +662,14 @@ function resultOf(r: OverviewRow): { label: string; tone: "success" | "warning" 
   return { label: "Aguardando", tone: "neutral" };
 }
 
-function AssignmentsTab({ canAssign }: { canAssign: boolean }) {
+function AssignmentsTab({ canAssign, canDelete }: { canAssign: boolean; canDelete: boolean }) {
   const toast = useToast();
   const [rows, setRows] = useState<OverviewRow[] | null>(null);
   const [query, setQuery] = useState("");
   const [assigning, setAssigning] = useState(false);
   const [credentials, setCredentials] = useState<{ studentName: string; token: string; password: string } | null>(null);
   const [revoking, setRevoking] = useState<OverviewRow | null>(null);
+  const [deleting, setDeleting] = useState<OverviewRow | null>(null);
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
@@ -698,6 +699,17 @@ function AssignmentsTab({ canAssign }: { canAssign: boolean }) {
     setRevoking(null);
     if (error) return void toast.error(dbErrorMessage(error, {}));
     toast.success("Acesso revogado.");
+    await load();
+  }
+
+  async function remove() {
+    if (!supabase || !deleting) return;
+    setBusy(true);
+    const { error } = await supabase.rpc("delete_exam_assignment", { p_id: deleting.id });
+    setBusy(false);
+    setDeleting(null);
+    if (error) return void toast.error(dbErrorMessage(error, {}));
+    toast.success("Aplicação excluída.");
     await load();
   }
 
@@ -777,8 +789,13 @@ function AssignmentsTab({ canAssign }: { canAssign: boolean }) {
                     <td className="px-2.5 py-3">{fmtDate(r.expires_at)}</td>
                     <td className="px-2.5 py-3 text-right">
                       {!r.revoked && canAssign && (
-                        <button type="button" onClick={() => setRevoking(r)} className="text-[11px] font-semibold text-danger hover:underline">
+                        <button type="button" onClick={() => setRevoking(r)} className="mr-2 text-[11px] font-semibold text-danger hover:underline">
                           Revogar
+                        </button>
+                      )}
+                      {canDelete && (
+                        <button type="button" onClick={() => setDeleting(r)} className="inline-flex rounded p-1.5 align-middle text-muted hover:bg-canvas hover:text-danger" aria-label={`Excluir aplicação de ${r.student_name}`}>
+                          <Trash2 size={14} aria-hidden />
                         </button>
                       )}
                     </td>
@@ -800,6 +817,16 @@ function AssignmentsTab({ canAssign }: { canAssign: boolean }) {
         />
       )}
       {credentials && <CredentialsDialog {...credentials} onClose={() => setCredentials(null)} />}
+      {deleting && (
+        <ConfirmDialog
+          title="Excluir aplicação?"
+          message={`A aplicação de "${deleting.exam_title}" para ${deleting.student_name} será apagada${deleting.attempts_used > 0 ? `, junto com ${deleting.attempts_used} resultado(s) registrado(s)` : ""}. O link deixa de funcionar. Não dá para desfazer.`}
+          confirmLabel="Excluir"
+          busy={busy}
+          onConfirm={() => void remove()}
+          onClose={() => !busy && setDeleting(null)}
+        />
+      )}
       {revoking && (
         <ConfirmDialog
           title="Revogar acesso?"
@@ -844,7 +871,7 @@ export function Exams() {
           </button>
         ))}
       </div>
-      {tab === "applications" ? <AssignmentsTab canAssign /> : <ExamsTab canEdit={isAdmin} />}
+      {tab === "applications" ? <AssignmentsTab canAssign canDelete={isAdmin} /> : <ExamsTab canEdit={isAdmin} />}
     </div>
   );
 }
