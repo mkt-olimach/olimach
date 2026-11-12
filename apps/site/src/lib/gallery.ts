@@ -32,19 +32,28 @@ export async function fetchGallery(signal?: AbortSignal): Promise<MasonryItem[] 
 export interface GalleryState {
   items: MasonryItem[];
   loading: boolean;
-  failed: boolean;
 }
 
+// Uma unica consulta por carregamento da pagina, compartilhada pelo menu e pela secao.
+let shared: Promise<MasonryItem[]> | null = null;
+function loadOnce(): Promise<MasonryItem[]> {
+  shared ??= fetchGallery()
+    .then((items) => items ?? [])
+    .catch(() => [] as MasonryItem[]);
+  return shared;
+}
+
+/** Imagens da galeria. Sem imagens (ou com falha), a lista vem vazia e a secao nao aparece. */
 export function useGallery(): GalleryState {
-  const [state, setState] = useState<GalleryState>({ items: [], loading: true, failed: false });
+  const [state, setState] = useState<GalleryState>({ items: [], loading: true });
   useEffect(() => {
-    const controller = new AbortController();
-    fetchGallery(controller.signal)
-      .then((items) => setState({ items: items ?? [], loading: false, failed: items === null }))
-      .catch((error: unknown) => {
-        if ((error as { name?: string }).name !== "AbortError") setState({ items: [], loading: false, failed: true });
-      });
-    return () => controller.abort();
+    let active = true;
+    void loadOnce().then((items) => {
+      if (active) setState({ items, loading: false });
+    });
+    return () => {
+      active = false;
+    };
   }, []);
   return state;
 }

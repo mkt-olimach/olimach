@@ -4,12 +4,12 @@ import { useEffect, useState } from "react";
 import type { FormEvent, MouseEvent, ReactNode } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { useCompany, useWhatsapp } from "../lib/company";
+import { useGallery } from "../lib/gallery";
 
 const nav = [
   { href: "/#inicio", label: "Início" },
   { href: "/#sobre", label: "Sobre nós" },
   { href: "/#cursos", label: "Cursos" },
-  { href: "/galeria", label: "Galeria" },
   { href: "/validar", label: "Certificados" },
   { href: "/#contato", label: "Contato" },
 ];
@@ -77,6 +77,8 @@ function AnchorLink({ href, className, children, onNavigate }: { href: string; c
 export function SiteLayout() {
   const company = useCompany();
   const wa = useWhatsapp();
+  const hasGallery = useGallery().items.length > 0;
+  const menu = hasGallery ? [...nav.slice(0, 3), { href: "/#galeria", label: "Galeria" }, ...nav.slice(3)] : nav;
   const { pathname, search, hash } = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -104,7 +106,7 @@ export function SiteLayout() {
                 menuOpen ? "flex" : "hidden",
               )}
             >
-              {nav.map((item) => (
+              {menu.map((item) => (
                 item.href.startsWith("/#") ? (
                   <AnchorLink key={item.href} href={item.href} onNavigate={() => setMenuOpen(false)} className="px-2 py-3 hover:text-navy-900 lg:p-0">
                     {item.label}
