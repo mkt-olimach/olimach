@@ -361,6 +361,16 @@ describe("RLS", () => {
     expect((await start(grant2.token, cpf, grant2.password)).status).toBe("unavailable");
     expect((await q<{ n: number }>("select count(*)::int as n from public.audit_log where entity = 'exam_assignments'"))[0].n).toBe(3);
 
+    // exclusao: so administrador; apaga a aplicacao e as tentativas, e o link deixa de existir
+    await expect(as("authenticated", SECRETARIA, () => db.query("select public.delete_exam_assignment($1)", [grant.assignment_id]))).rejects.toThrow(/Somente administradores/);
+    await as("authenticated", ADMIN, () => db.query("select public.delete_exam_assignment($1)", [grant.assignment_id]));
+    expect(await q("select 1 from public.exam_assignments where id = '" + grant.assignment_id + "'")).toHaveLength(0);
+    expect(await q("select 1 from public.exam_attempts where assignment_id = '" + grant.assignment_id + "'")).toHaveLength(0);
+    expect((await start(grant.token, cpf, grant.password)).status).toBe("invalid");
+    const [del] = await q<{ payload: { attempts_deleted: number } }>("select payload from public.audit_log where entity = 'exam_assignments' and action = 'delete'");
+    expect(del.payload.attempts_deleted).toBe(2);
+    await expect(as("authenticated", ADMIN, () => db.query("select public.delete_exam_assignment($1)", [grant.assignment_id]))).rejects.toThrow(/nao encontrada/);
+
     // prova sem questoes nao pode ser aplicada
     const [{ id: emptyId }] = await as("authenticated", ADMIN, () => q<{ id: string }>("insert into public.exams (course_id, title) values ($1, 'Prova vazia') returning id", [courseId]));
     await expect(as("authenticated", SECRETARIA, () => db.query("select * from public.create_exam_assignment($1, $2)", [emptyId, studentId]))).rejects.toThrow(/nao tem questoes/);
