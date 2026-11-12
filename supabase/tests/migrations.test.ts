@@ -281,6 +281,91 @@ describe("RLS", () => {
     expect(await q("select 1 from public.gallery_images")).toHaveLength(0);
   });
 
+  it("provas online: gabarito protegido, acesso por token + CPF + senha, correcao no servidor e limites", async () => {
+    const [{ id: studentId, cpf }] = await q<{ id: string; cpf: string }>("select id, cpf from public.students order by cpf limit 1");
+    const [{ id: courseId }] = await q<{ id: string }>("select id from public.courses where category <> 'parceria' limit 1");
+
+    // so administrador cadastra provas; secretaria le
+    const newExam = `insert into public.exams (course_id, title, passing_score, max_attempts) values ('${courseId}', 'Prova Teste', 70, 2) returning id`;
+    await expect(as("authenticated", SECRETARIA, () => db.query(newExam))).rejects.toThrow(/row-level security/);
+    const [{ id: examId }] = await as("authenticated", ADMIN, () => q<{ id: string }>(newExam));
+    const questionIds: string[] = [];
+    const correctIds: string[] = [];
+    for (const [i, text] of ["Pergunta 1?", "Pergunta 2?"].entries()) {
+      const [{ id }] = await as("authenticated", ADMIN, () => q<{ id: string }>("insert into public.exam_questions (exam_id, position, text) values ($1, $2, $3) returning id", [examId, i, text]));
+      questionIds.push(id);
+      const [{ id: right }] = await as("authenticated", ADMIN, () => q<{ id: string }>("insert into public.exam_options (question_id, position, text, is_correct) values ($1, 0, 'Certa', true) returning id", [id]));
+      correctIds.push(right);
+      await as("authenticated", ADMIN, () => db.query("insert into public.exam_options (question_id, position, text) values ($1, 1, 'Errada A'), ($1, 2, 'Errada B')", [id]));
+      // no maximo uma correta por questao
+      await expect(as("authenticated", ADMIN, () => db.query("insert into public.exam_options (question_id, position, text, is_correct) values ($1, 3, 'Outra certa', true)", [id]))).rejects.toThrow(/exam_options_one_correct/);
+    }
+    expect(await as("authenticated", SECRETARIA, () => q("select 1 from public.exam_options where is_correct"))).toHaveLength(2);
+
+    // aplicacao: so a equipe, via RPC; anon nao cria
+    await expect(as("anon", null, () => db.query("select * from public.create_exam_assignment($1, $2)", [examId, studentId]))).rejects.toThrow(/permission denied/);
+    const [grant] = await as("authenticated", SECRETARIA, () => q<{ assignment_id: string; token: string; password: string }>("select * from public.create_exam_assignment($1, $2)", [examId, studentId]));
+    expect(grant.token).toMatch(/^[0-9a-f]{64}$/);
+    expect(grant.password).toMatch(/^[2-9A-HJ-NP-Z]{8}$/);
+
+    // a equipe nao le hashes; o anon nao le nenhuma tabela
+    await expect(as("authenticated", SECRETARIA, () => db.query("select token_hash from public.exam_assignments"))).rejects.toThrow(/permission denied/);
+    await expect(as("authenticated", SECRETARIA, () => db.query("select key_hash from public.exam_attempts"))).rejects.toThrow(/permission denied/);
+    for (const table of ["exams", "exam_questions", "exam_options", "exam_assignments", "exam_attempts"]) {
+      await expect(as("anon", null, () => db.query(`select 1 from public.${table}`))).rejects.toThrow(/permission denied/);
+    }
+
+    const start = (token: string, cpfValue: string, password: string) =>
+      as("anon", null, () => q<{ r: Record<string, unknown> }>("select public.exam_start($1, $2, $3) as r", [token, cpfValue, password])).then((rows) => rows[0].r);
+    const submit = (key: string, answers: Record<string, string>) =>
+      as("anon", null, () => q<{ r: Record<string, unknown> }>("select public.exam_submit($1, $2::jsonb) as r", [key, JSON.stringify(answers)])).then((rows) => rows[0].r);
+
+    // credenciais erradas: resposta generica; apos 5 erros bloqueia
+    expect((await start("0".repeat(64), cpf, grant.password)).status).toBe("invalid");
+    for (let i = 0; i < 5; i++) expect((await start(grant.token, cpf, "ERRADA99")).status).toBe("invalid");
+    expect((await start(grant.token, cpf, grant.password)).status).toBe("locked");
+    await db.exec(`update public.exam_assignments set locked_until = null where id = '${grant.assignment_id}'`);
+
+    // acesso correto (CPF com ou sem mascara, senha em qualquer caixa): questoes sem gabarito
+    const first = await start(grant.token, `${cpf.slice(0, 3)}.${cpf.slice(3, 6)}.${cpf.slice(6, 9)}-${cpf.slice(9)}`, grant.password.toLowerCase());
+    expect(first.status).toBe("ok");
+    expect(JSON.stringify(first)).not.toContain("is_correct");
+    const questions = first.questions as Array<{ id: string; options: Array<{ id: string; text: string }> }>;
+    expect(questions).toHaveLength(2);
+    expect(questions.every((qn) => qn.options.length === 3 && qn.options.every((o) => Object.keys(o).sort().join() === "id,text"))).toBe(true);
+
+    // 1 de 2 certa = 50 (reprovado, minimo 70); reenviar devolve o mesmo resultado
+    const res1 = await submit(first.attempt_key as string, { [questionIds[0]]: correctIds[0], [questionIds[1]]: questions[1].options.find((o) => o.id !== correctIds[1])!.id });
+    expect(res1).toMatchObject({ status: "ok", score: 50, passed: false, correct: 1, total: 2 });
+    expect(await submit(first.attempt_key as string, { [questionIds[1]]: correctIds[1] })).toMatchObject({ score: 50 });
+
+    // segunda tentativa: tudo certo = 100; terceira nao existe (max 2)
+    const second = await start(grant.token, cpf, grant.password);
+    expect(second.status).toBe("ok");
+    expect(await submit(second.attempt_key as string, { [questionIds[0]]: correctIds[0], [questionIds[1]]: correctIds[1] })).toMatchObject({ score: 100, passed: true });
+    expect((await start(grant.token, cpf, grant.password)).status).toBe("no_attempts");
+
+    // acompanhamento da equipe
+    const [row] = await as("authenticated", SECRETARIA, () => q<{ attempts_used: number; best_score: string; passed: boolean }>("select attempts_used, best_score, passed from public.exam_assignments_overview where id = $1", [grant.assignment_id]));
+    expect(row).toMatchObject({ attempts_used: 2, passed: true });
+    expect(Number(row.best_score)).toBe(100);
+
+    // prazo: tentativa em andamento vencida e encerrada com nota 0; revogada nao abre
+    const [grant2] = await as("authenticated", SECRETARIA, () => q<{ assignment_id: string; token: string; password: string }>("select * from public.create_exam_assignment($1, $2, null, 3)", [examId, studentId]));
+    await db.exec("update public.exams set time_limit_minutes = 5 where id = '" + examId + "'");
+    const timed = await start(grant2.token, cpf, grant2.password);
+    expect(timed.status).toBe("ok");
+    await db.exec(`update public.exam_attempts set deadline_at = now() - interval '5 minutes' where assignment_id = '${grant2.assignment_id}'`);
+    expect(await submit(timed.attempt_key as string, { [questionIds[0]]: correctIds[0], [questionIds[1]]: correctIds[1] })).toMatchObject({ score: 0, passed: false, late: true });
+    await as("authenticated", SECRETARIA, () => db.query("select public.revoke_exam_assignment($1)", [grant2.assignment_id]));
+    expect((await start(grant2.token, cpf, grant2.password)).status).toBe("unavailable");
+    expect((await q<{ n: number }>("select count(*)::int as n from public.audit_log where entity = 'exam_assignments'"))[0].n).toBe(3);
+
+    // prova sem questoes nao pode ser aplicada
+    const [{ id: emptyId }] = await as("authenticated", ADMIN, () => q<{ id: string }>("insert into public.exams (course_id, title) values ($1, 'Prova vazia') returning id", [courseId]));
+    await expect(as("authenticated", SECRETARIA, () => db.query("select * from public.create_exam_assignment($1, $2)", [emptyId, studentId]))).rejects.toThrow(/nao tem questoes/);
+  });
+
   it("bucket de capas e publico; os demais continuam privados", async () => {
     const rows = await q<{ id: string; public: boolean }>("select id, public from storage.buckets order by id");
     expect(Object.fromEntries(rows.map((r) => [r.id, r.public]))).toEqual({ branding: true, certificates: false, "course-covers": true, gallery: true, signatures: false });
