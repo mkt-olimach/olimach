@@ -36,11 +36,11 @@ const sample = (over: Partial<CertificateData> = {}): CertificateData => ({
 });
 
 describe("certificate-pdf", () => {
-  it("gera A4 retrato com frente e verso", async () => {
+  it("gera A4 retrato em uma pagina quando o conteudo cabe", async () => {
     const bytes = await buildCertificatePdf(sample());
     if (process.env.OLIMACH_SAMPLE_PDF) writeFileSync(process.env.OLIMACH_SAMPLE_PDF, bytes);
     const doc = await PDFDocument.load(bytes);
-    expect(doc.getPageCount()).toBe(2);
+    expect(doc.getPageCount()).toBe(1);
     const { width, height } = doc.getPage(0).getSize();
     expect(Math.round(width)).toBe(595);
     expect(Math.round(height)).toBe(842);
@@ -51,13 +51,13 @@ describe("certificate-pdf", () => {
     const bytes = await buildCertificatePdf(
       sample({ expiresAt: null, signers: [] }),
     );
-    expect((await PDFDocument.load(bytes)).getPageCount()).toBe(2);
+    expect((await PDFDocument.load(bytes)).getPageCount()).toBe(1);
   });
 
   it("continua o conteudo programatico em mais paginas do verso", async () => {
     const longSyllabus = Array.from({ length: 120 }, (_, i) => `${i + 1}. Tópico de estudo número ${i + 1} do programa`).join("\n");
     const doc = await PDFDocument.load(await buildCertificatePdf(sample({ syllabus: longSyllabus })));
-    expect(doc.getPageCount()).toBeGreaterThan(2);
+    expect(doc.getPageCount()).toBeGreaterThan(1);
   });
 
   it("e deterministico no conteudo e o hash muda com o codigo", async () => {
