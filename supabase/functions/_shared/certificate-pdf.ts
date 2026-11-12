@@ -11,6 +11,8 @@ export interface Signer {
   qualification: string;
   registry: string;
   signature?: { bytes: Uint8Array; type: "png" | "jpg" } | null;
+  /** Ajuste da assinatura (pt) em relacao a posicao padrao: x e y (y positivo sobe) e multiplicador de tamanho. */
+  adjust?: { x: number; y: number; scale: number } | null;
 }
 
 export interface CertificateData {
@@ -134,11 +136,6 @@ async function drawSigner(doc: PDFDocument, page: PDFPage, signer: Signer | null
     const clean = toWinAnsi(text);
     page.drawText(clean, { x: centerX - font.widthOfTextAtSize(clean, size) / 2, y, size, font, color });
   };
-  if (signer?.signature) {
-    const image = signer.signature.type === "png" ? await doc.embedPng(signer.signature.bytes) : await doc.embedJpg(signer.signature.bytes);
-    const scale = Math.min(190 / image.width, 46 / image.height);
-    page.drawImage(image, { x: centerX - (image.width * scale) / 2, y: lineY + 4, width: image.width * scale, height: image.height * scale });
-  }
   page.drawLine({ start: { x: centerX - width / 2, y: lineY }, end: { x: centerX + width / 2, y: lineY }, thickness: 0.7, color: GRAY });
   let ty = lineY - 13;
   if (signer) {
@@ -151,6 +148,15 @@ async function drawSigner(doc: PDFDocument, page: PDFPage, signer: Signer | null
     }
   }
   draw(role.toUpperCase(), ty - 1, bold, 7, NAVY);
+  // Assinatura por ultimo: fica em primeiro plano e pode cobrir a linha e os textos.
+  if (signer?.signature) {
+    const image = signer.signature.type === "png" ? await doc.embedPng(signer.signature.bytes) : await doc.embedJpg(signer.signature.bytes);
+    const adjust = signer.adjust ?? { x: 0, y: 0, scale: 1 };
+    const scale = Math.min(190 / image.width, 46 / image.height) * adjust.scale;
+    const w = image.width * scale;
+    const h = image.height * scale;
+    page.drawImage(image, { x: centerX + adjust.x - w / 2, y: lineY + 4 + adjust.y, width: w, height: h });
+  }
 }
 
 export async function buildCertificatePdf(data: CertificateData): Promise<Uint8Array> {

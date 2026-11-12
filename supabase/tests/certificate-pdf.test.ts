@@ -48,6 +48,13 @@ describe("certificate-pdf", () => {
     expect(new TextDecoder().decode(bytes.slice(0, 5))).toBe("%PDF-");
   });
 
+  it("aplica o ajuste da assinatura (posicao e tamanho) sem alterar o numero de paginas", async () => {
+    const adjusted = sample();
+    adjusted.signers = adjusted.signers.map((x) => ({ ...x, signer: { ...x.signer, adjust: { x: 30, y: -12, scale: 1.8 } } }));
+    const doc = await PDFDocument.load(await buildCertificatePdf(adjusted));
+    expect(doc.getPageCount()).toBe(1);
+  });
+
   it("aceita certificado sem validade e sem assinaturas", async () => {
     const bytes = await buildCertificatePdf(
       sample({ expiresAt: null, signers: [] }),

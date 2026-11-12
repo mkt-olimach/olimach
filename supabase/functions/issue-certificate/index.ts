@@ -42,6 +42,9 @@ interface Person {
   qualification: string;
   registry: string;
   signature_path: string | null;
+  sig_offset_x?: number;
+  sig_offset_y?: number;
+  sig_scale?: number;
 }
 
 async function toSigner(client: Client, person: Person): Promise<Signer> {
@@ -50,6 +53,7 @@ async function toSigner(client: Client, person: Person): Promise<Signer> {
     qualification: person.qualification,
     registry: person.registry,
     signature: await loadSignature(client, person.signature_path),
+    adjust: { x: person.sig_offset_x ?? 0, y: person.sig_offset_y ?? 0, scale: person.sig_scale ?? 1 },
   };
 }
 
@@ -115,7 +119,7 @@ Deno.serve(async (request) => {
   if (existing && existing.length > 0) return fail(409, "already_issued", "Esta matrícula já tem um certificado válido. Revogue-o para reemitir.");
 
   // Assinaturas padrao (Configuracoes): engenheiro tecnico, diretoria e tecnico em seguranca.
-  const { data: signerRows, error: signerError } = await client.from("certificate_signers").select("role, name, qualification, registry, signature_path");
+  const { data: signerRows, error: signerError } = await client.from("certificate_signers").select("role, name, qualification, registry, signature_path, sig_offset_x, sig_offset_y, sig_scale");
   if (signerError) return fail(500, "signers_failed", "Não foi possível consultar as assinaturas padrão.");
   const byRole = new Map((signerRows ?? []).map((r) => [r.role as string, r as Person]));
   const ROLES: Array<[string, string]> = [
