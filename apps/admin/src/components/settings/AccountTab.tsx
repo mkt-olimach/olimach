@@ -2,7 +2,7 @@ import { newPasswordSchema } from "@olimach/schemas";
 import { Button } from "@olimach/ui";
 import { useState } from "react";
 import type { FormEvent } from "react";
-import { useAuth } from "../../lib/auth";
+import { roleLabel, useAuth } from "../../lib/auth";
 import { useToast } from "../../lib/toast";
 import { Field, inputClass } from "../ui";
 
@@ -44,7 +44,7 @@ export function AccountTab() {
           </div>
           <div>
             <dt className="text-xs text-muted">Perfil</dt>
-            <dd className="font-medium text-ink">{profile ? (profile.role === "admin" ? "Administrador" : "Secretaria") : "Sem perfil ativo"}</dd>
+            <dd className="font-medium text-ink">{profile ? roleLabel[profile.role] : "Sem perfil ativo"}</dd>
           </div>
         </dl>
       </section>

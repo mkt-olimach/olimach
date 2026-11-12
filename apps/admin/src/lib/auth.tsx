@@ -6,8 +6,13 @@ import { supabase } from "./supabase";
 export interface Profile {
   id: string;
   name: string;
-  role: "admin" | "secretaria";
+  role: "super_admin" | "admin" | "secretaria";
 }
+
+/** super_admin tambem e administrador: herda tudo que o admin faz. */
+export const isAdminRole = (role: Profile["role"] | undefined): boolean => role === "admin" || role === "super_admin";
+export const isSuperAdminRole = (role: Profile["role"] | undefined): boolean => role === "super_admin";
+export const roleLabel: Record<Profile["role"], string> = { super_admin: "Super administrador", admin: "Administrador", secretaria: "Secretaria" };
 
 interface AuthState {
   loading: boolean;

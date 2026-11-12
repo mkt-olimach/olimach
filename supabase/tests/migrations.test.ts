@@ -7,6 +7,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const ADMIN = "11111111-1111-4111-8111-111111111111";
 const SECRETARIA = "22222222-2222-4222-8222-222222222222";
+const SUPER = "33333333-3333-4333-8333-333333333333";
 
 // Stubs minimos do ambiente Supabase (roles, auth, storage) para rodar as migrations em Postgres puro.
 const SUPABASE_STUBS = `
@@ -237,9 +238,37 @@ describe("RLS", () => {
     expect(by["split-legado"]).toMatchObject({ workload_hours: 7, theory_hours: 7, practice_hours: 0 });
   });
 
+  it("super_admin: e admin, alem de unico a mexer em super_admin e nos dados da empresa", async () => {
+    await db.exec(`insert into auth.users (id) values ('${SUPER}'); insert into public.profiles (id, name, role) values ('${SUPER}', 'Super Teste', 'super_admin');`);
+    // is_admin() vale para super_admin; is_super_admin() so para ele
+    expect((await as("authenticated", SUPER, () => q<{ a: boolean; s: boolean }>("select public.is_admin() as a, public.is_super_admin() as s")))[0]).toEqual({ a: true, s: true });
+    expect((await as("authenticated", ADMIN, () => q<{ a: boolean; s: boolean }>("select public.is_admin() as a, public.is_super_admin() as s")))[0]).toEqual({ a: true, s: false });
+
+    // dados da empresa: so o super_admin escreve; equipe le
+    const company = "insert into public.company_settings (company_name, phone) values ('Empresa Teste', '(22) 0000-0000') on conflict (singleton) do update set phone = excluded.phone";
+    await expect(as("authenticated", ADMIN, () => db.query(company))).rejects.toThrow(/row-level security/);
+    await expect(as("authenticated", SECRETARIA, () => db.query(company))).rejects.toThrow(/row-level security/);
+    await as("authenticated", SUPER, () => db.query(company));
+    expect(await as("authenticated", SECRETARIA, () => q("select 1 from public.company_settings"))).toHaveLength(1);
+    expect(await as("anon", null, () => q("select 1 from public.company_settings").catch(() => "negado"))).toBe("negado");
+    const pub = await as("anon", null, () => q<{ company_name: string; phone: string }>("select company_name, phone from public.public_company()"));
+    expect(pub).toEqual([{ company_name: "Empresa Teste", phone: "(22) 0000-0000" }]);
+
+    // admin nao promove ninguem a super_admin nem mexe em um
+    await expect(as("authenticated", ADMIN, () => db.query(`update public.profiles set role = 'super_admin' where id = '${SECRETARIA}'`))).rejects.toThrow(/super administrador/);
+    await expect(as("authenticated", ADMIN, () => db.query(`update public.profiles set active = false where id = '${SUPER}'`))).rejects.toThrow(/super administrador/);
+    await expect(as("authenticated", ADMIN, () => db.query(`delete from public.profiles where id = '${SUPER}'`))).rejects.toThrow(/super administrador/);
+    // super_admin promove e rebaixa; sem sessao (SQL Editor) tambem pode
+    await as("authenticated", SUPER, () => db.query(`update public.profiles set role = 'super_admin' where id = '${SECRETARIA}'`));
+    await as("authenticated", SUPER, () => db.query(`update public.profiles set role = 'secretaria' where id = '${SECRETARIA}'`));
+    expect(await q("select 1 from public.profiles where id = '" + SECRETARIA + "' and role = 'secretaria'")).toHaveLength(1);
+    // limpeza: outros testes assumem que o admin e o unico administrador
+    await db.exec(`delete from public.profiles where id = '${SUPER}'; delete from public.company_settings;`);
+  });
+
   it("bucket de capas e publico; os demais continuam privados", async () => {
     const rows = await q<{ id: string; public: boolean }>("select id, public from storage.buckets order by id");
-    expect(Object.fromEntries(rows.map((r) => [r.id, r.public]))).toEqual({ certificates: false, "course-covers": true, signatures: false });
+    expect(Object.fromEntries(rows.map((r) => [r.id, r.public]))).toEqual({ branding: true, certificates: false, "course-covers": true, signatures: false });
   });
 
   it("secretaria opera alunos mas nao revoga, nao edita catalogo e nao le auditoria", async () => {

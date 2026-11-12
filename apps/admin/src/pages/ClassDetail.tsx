@@ -7,7 +7,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { ConfirmDialog, dbErrorMessage, useDebouncedValue } from "../components/ui";
 import { classStatusLabel, classStatusTone, formatPeriod } from "../lib/classes";
 import type { ClassStatus } from "../lib/classes";
-import { useAuth } from "../lib/auth";
+import { isAdminRole, useAuth } from "../lib/auth";
 import { supabase } from "../lib/supabase";
 import { useToast } from "../lib/toast";
 import { ClassForm } from "./Classes";
@@ -109,7 +109,7 @@ export function ClassDetail() {
   const navigate = useNavigate();
   const toast = useToast();
   const { profile } = useAuth();
-  const isAdmin = profile?.role === "admin";
+  const isAdmin = isAdminRole(profile?.role);
   const [data, setData] = useState<ClassDetailData | null>(null);
   const [loading, setLoading] = useState(Boolean(supabase));
   const [error, setError] = useState(false);

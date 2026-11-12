@@ -9,6 +9,7 @@ import {
   LogOut,
   Menu,
   Search,
+  Palette,
   Settings2,
   UserCog,
   UsersRound,
@@ -18,7 +19,7 @@ import type { LucideIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { NavLink, Navigate, Outlet, useLocation, useNavigate, useSearchParams } from "react-router-dom";
-import { useAuth } from "../lib/auth";
+import { isSuperAdminRole, roleLabel, useAuth } from "../lib/auth";
 import { initials } from "../lib/certificates";
 
 const nav: Array<{ to: string; label: string; icon: LucideIcon; end?: boolean }> = [
@@ -31,6 +32,9 @@ const nav: Array<{ to: string; label: string; icon: LucideIcon; end?: boolean }>
   { to: "/relatorios", label: "Relatórios", icon: ChartNoAxesColumn },
   { to: "/configuracoes", label: "Configurações", icon: Settings2 },
 ];
+
+/** Modulo exclusivo do super administrador, logo abaixo de Configuracoes. */
+const whiteLabelItem = { to: "/white-label", label: "White Label", icon: Palette };
 
 function GlobalSearch() {
   const navigate = useNavigate();
@@ -108,7 +112,7 @@ export function AdminLayout() {
           </div>
 
           <nav aria-label="Principal" className="flex flex-col gap-1">
-            {nav.map(({ to, label, icon: Icon, end }) => (
+            {(isSuperAdminRole(profile?.role) ? [...nav, whiteLabelItem] : nav).map(({ to, label, icon: Icon, end }: { to: string; label: string; icon: LucideIcon; end?: boolean }) => (
               <NavLink
                 key={to}
                 to={to}
@@ -158,7 +162,7 @@ export function AdminLayout() {
               <div className="hidden min-w-24 text-sm md:block">
                 <p className="max-w-[170px] truncate text-xs font-bold text-ink">{displayName}</p>
                 <p className="text-[10px] text-muted">
-                  {profile ? (profile.role === "admin" ? "Administrador" : "Secretaria") : "Sem perfil ativo"}
+                  {profile ? roleLabel[profile.role] : "Sem perfil ativo"}
                 </p>
               </div>
               <button

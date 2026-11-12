@@ -4,7 +4,7 @@ import { ImageUp, Pencil, Plus, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import { ConfirmDialog, Field, Modal, PageHeader, dbErrorMessage, inputClass } from "../components/ui";
-import { useAuth } from "../lib/auth";
+import { isAdminRole, useAuth } from "../lib/auth";
 import { supabase } from "../lib/supabase";
 import { useToast } from "../lib/toast";
 
@@ -237,7 +237,7 @@ function PeopleList({ table }: { table: Table }) {
   const { profile } = useAuth();
   const toast = useToast();
   const copy = COPY[table];
-  const isAdmin = profile?.role === "admin";
+  const isAdmin = isAdminRole(profile?.role);
   const [rows, setRows] = useState<PersonRow[]>([]);
   const [loading, setLoading] = useState(Boolean(supabase));
   const [error, setError] = useState(false);

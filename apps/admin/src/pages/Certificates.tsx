@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Field, Modal, PageHeader, Pager, dbErrorMessage, inputClass } from "../components/ui";
-import { useAuth } from "../lib/auth";
+import { isAdminRole, useAuth } from "../lib/auth";
 import { formatDate, initials, openCertificatePdf, useDashboardData } from "../lib/certificates";
 import type { CertificateRow } from "../lib/certificates";
 import { formatPeriod } from "../lib/classes";
@@ -199,7 +199,7 @@ const tabs: Array<{ id: Tab; label: string }> = [
 export function Certificates() {
   const { profile } = useAuth();
   const toast = useToast();
-  const isAdmin = profile?.role === "admin";
+  const isAdmin = isAdminRole(profile?.role);
   const { rows, loading, error, reload } = useDashboardData();
   const [params, setParams] = useSearchParams();
   const preset = params.get("emitir");

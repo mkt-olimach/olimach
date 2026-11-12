@@ -10,6 +10,7 @@ import { People } from "./pages/People";
 import { Reports } from "./pages/Reports";
 import { Settings } from "./pages/Settings";
 import { Students } from "./pages/Students";
+import { WhiteLabel } from "./pages/WhiteLabel";
 import { ResetPassword } from "./pages/ResetPassword";
 
 export function App() {
@@ -27,6 +28,7 @@ export function App() {
         <Route path="/instrutores" element={<People />} />
         <Route path="/relatorios" element={<Reports />} />
         <Route path="/configuracoes" element={<Settings />} />
+        <Route path="/white-label" element={<WhiteLabel />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
