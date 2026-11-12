@@ -24,6 +24,7 @@ import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { categoryLabel, faq, modalityLabel } from "../content/courses";
 import { useCatalog } from "../lib/catalog";
+import { GallerySection } from "./Gallery";
 import { useCompany, useWhatsapp } from "../lib/company";
 
 /* Imagens do mockup (derivadas da referencia visual). Trocar por fotografias originais ou licenciadas
@@ -336,6 +337,9 @@ export function Home() {
           )}
         </div>
       </section>
+
+      {/* GALERIA (so aparece com imagens cadastradas no painel) */}
+      <GallerySection />
 
       {/* FAQ */}
       <section id="faq" className="mx-auto max-w-3xl px-5 pb-14 md:px-10">
