@@ -3,7 +3,7 @@ import { buttonClasses } from "@olimach/ui";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { useParams } from "react-router-dom";
-import { startExam, submitExam } from "../lib/exam";
+import { examCoverUrl, startExam, submitExam } from "../lib/exam";
 import type { ExamSession, SubmitResult } from "../lib/exam";
 
 const inputClass = "mt-1.5 w-full rounded-xl border border-line bg-surface px-3.5 py-3 text-sm text-ink outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20";
@@ -160,8 +160,14 @@ export function Exam() {
   /* ----------------------------------------------------------------- prova */
   if (session) {
     const low = remaining !== null && remaining <= 60;
+    const cover = examCoverUrl(session.exam.cover_path);
     return (
       <section className="mx-auto max-w-3xl px-5 py-10">
+        {cover && (
+          <div className="mb-6 aspect-[16/7] overflow-hidden rounded-2xl border border-line bg-canvas">
+            <img src={cover} alt={`Capa do treinamento: ${session.exam.title}`} className="h-full w-full object-cover" />
+          </div>
+        )}
         <div className="sticky top-[74px] z-20 -mx-2 mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line bg-surface/95 px-4 py-3 shadow-sm backdrop-blur">
           <div>
             <h1 className="text-lg text-navy-900">{session.exam.title}</h1>

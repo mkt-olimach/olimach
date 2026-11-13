@@ -19,7 +19,7 @@ interface ExamRow {
   time_limit_minutes: number | null;
   max_attempts: number;
   active: boolean;
-  courses: { name: string } | null;
+  courses: { name: string; cover_path: string | null } | null;
   exam_questions: Array<{ count: number }>;
 }
 
@@ -56,7 +56,7 @@ interface OverviewRow {
   last_finished_at: string | null;
 }
 
-const EXAM_COLUMNS = "id, course_id, title, instructions, passing_score, time_limit_minutes, max_attempts, active, courses(name), exam_questions(count)";
+const EXAM_COLUMNS = "id, course_id, title, instructions, passing_score, time_limit_minutes, max_attempts, active, courses(name, cover_path), exam_questions(count)";
 const fmtDate = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString("pt-BR") : "-");
 const fmtDateTime = (iso: string | null) => (iso ? new Date(iso).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }) : "-");
 const questionCount = (e: ExamRow) => e.exam_questions[0]?.count ?? 0;
@@ -406,6 +406,7 @@ function ExamPreviewDialog({ exam, onClose }: { exam: ExamRow; onClose: () => vo
 
   const fmt = (sec: number) => `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
   const answered = Object.keys(answers).length;
+  const cover = exam.courses?.cover_path && supabase ? supabase.storage.from("course-covers").getPublicUrl(exam.courses.cover_path).data.publicUrl : null;
 
   return (
     <Modal title={`Prévia: ${exam.title}`} description="É assim que o aluno vê a prova. Nada é salvo e o resultado é apenas uma simulação." onClose={onClose} wide>
@@ -438,6 +439,11 @@ function ExamPreviewDialog({ exam, onClose }: { exam: ExamRow; onClose: () => vo
               </label>
             </div>
           </div>
+          {cover && (
+            <div className="mb-4 aspect-[16/7] overflow-hidden rounded-2xl border border-line bg-canvas">
+              <img src={cover} alt={`Capa do treinamento: ${exam.courses?.name ?? exam.title}`} className="h-full w-full object-cover" />
+            </div>
+          )}
           {exam.instructions && <p className="mb-4 whitespace-pre-line rounded-2xl bg-canvas p-4 text-sm text-muted">{exam.instructions}</p>}
           <ol className="space-y-4">
             {questions.map((q, index) => (

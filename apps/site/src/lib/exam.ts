@@ -13,7 +13,7 @@ export interface ExamQuestion {
 export interface ExamSession {
   attempt_key: string;
   student_name: string;
-  exam: { title: string; instructions: string; passing_score: number; time_limit_minutes: number | null; max_attempts: number };
+  exam: { title: string; cover_path?: string | null; instructions: string; passing_score: number; time_limit_minutes: number | null; max_attempts: number };
   deadline_at: string | null;
   server_now: string;
   questions: ExamQuestion[];
@@ -45,3 +45,9 @@ export const startExam = (token: string, cpf: string, password: string) => rpc<S
 
 /** Envia as respostas ({ idDaQuestao: idDaAlternativa }); a correcao e feita no servidor. */
 export const submitExam = (attemptKey: string, answers: Record<string, string>) => rpc<SubmitResult>("exam_submit", { p_attempt_key: attemptKey, p_answers: answers });
+
+/** Capa do treinamento (bucket publico course-covers); o caminho vem do RPC, nunca de entrada do usuario. */
+export function examCoverUrl(path: string | null | undefined): string | null {
+  if (!path || !url) return null;
+  return `${url}/storage/v1/object/public/course-covers/${path.split("/").map(encodeURIComponent).join("/")}`;
+}
