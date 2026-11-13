@@ -192,7 +192,7 @@ export const newPasswordSchema = z
 
 export const emailSchema = z.string().trim().email("Informe um e-mail válido.");
 
-export { DEFAULT_ACCENT, DEFAULT_COMPANY, buildCompanyView, contrastWithWhite, deriveAccent, publicCompanySchema, whatsappDigits } from "./company";
+export { DEFAULT_ACCENT, DEFAULT_COMPANY, buildCompanyView, contrastWithWhite, deriveAccent, publicCompanySchema, safeHttpUrl, whatsappDigits } from "./company";
 export type { CompanyView, PublicCompany } from "./company";
 
 /** Linha devolvida por public.public_gallery(): imagem da galeria do site. */

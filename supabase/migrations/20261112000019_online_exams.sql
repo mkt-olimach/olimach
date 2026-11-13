@@ -241,6 +241,35 @@ grant execute on function public.revoke_exam_assignment(uuid) to authenticated;
 -- ---------------------------------------------------------------------------
 -- RPCs do aluno (anon): iniciar e enviar a prova
 -- ---------------------------------------------------------------------------
+-- IP do cliente para rate limit. O primeiro item de X-Forwarded-For pode ser forjado pelo cliente; usa-se o IP
+-- que o proxy de borda informa (cf-connecting-ip / x-real-ip) e, na falta, o ULTIMO item do X-Forwarded-For
+-- (o acrescentado pelo proxy mais proximo do servidor).
+create function public.request_client_ip()
+returns text
+language plpgsql
+stable
+set search_path = ''
+as $$
+declare
+  v_headers json;
+  v_xff text;
+begin
+  begin
+    v_headers := pg_catalog.current_setting('request.headers', true)::json;
+  exception when others then
+    v_headers := null;
+  end;
+  v_xff := v_headers ->> 'x-forwarded-for';
+  return pg_catalog.btrim(coalesce(
+    nullif(v_headers ->> 'cf-connecting-ip', ''),
+    nullif(v_headers ->> 'x-real-ip', ''),
+    nullif((pg_catalog.string_to_array(coalesce(v_xff, ''), ','))[pg_catalog.array_length(pg_catalog.string_to_array(coalesce(v_xff, ''), ','), 1)], ''),
+    'unknown'
+  ));
+end;
+$$;
+revoke all on function public.request_client_ip() from public, anon, authenticated;
+
 create function public.exam_rate_limited()
 returns boolean
 language plpgsql
@@ -249,18 +278,11 @@ security definer
 set search_path = ''
 as $$
 declare
-  v_headers json;
-  v_ip text;
   v_hits integer;
 begin
-  begin
-    v_headers := pg_catalog.current_setting('request.headers', true)::json;
-  exception when others then
-    v_headers := null;
-  end;
-  v_ip := pg_catalog.split_part(coalesce(v_headers ->> 'x-forwarded-for', 'unknown'), ',', 1);
+  delete from public.validation_rate_limit where window_start < now() - interval '1 hour';
   insert into public.validation_rate_limit as r (ip_hash, window_start, hits)
-  values (encode(sha256(convert_to('exam:' || btrim(v_ip), 'UTF8')), 'hex'), date_trunc('minute', now()), 1)
+  values (encode(sha256(convert_to('exam:' || public.request_client_ip(), 'UTF8')), 'hex'), date_trunc('minute', now()), 1)
   on conflict (ip_hash, window_start) do update set hits = r.hits + 1
   returning r.hits into v_hits;
   return v_hits > 40; -- 40 chamadas por IP por minuto
@@ -396,6 +418,10 @@ declare
 begin
   if public.exam_rate_limited() then
     return jsonb_build_object('status', 'rate_limited');
+  end if;
+  -- limite de tamanho: um aluno nao grava um payload arbitrariamente grande
+  if pg_column_size(v_answers) > 65536 then
+    return jsonb_build_object('status', 'invalid');
   end if;
   select * into att from public.exam_attempts
     where key_hash = encode(sha256(convert_to(coalesce(p_attempt_key, ''), 'UTF8')), 'hex');

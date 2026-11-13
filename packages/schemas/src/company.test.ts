@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_ACCENT, DEFAULT_COMPANY, buildCompanyView, contrastWithWhite, deriveAccent, publicCompanySchema, whatsappDigits } from "./company";
+import { DEFAULT_ACCENT, DEFAULT_COMPANY, buildCompanyView, contrastWithWhite, deriveAccent, publicCompanySchema, safeHttpUrl, whatsappDigits } from "./company";
 
 describe("whatsappDigits", () => {
   it("acrescenta 55 e aceita numero com mascara", () => {
@@ -73,5 +73,19 @@ describe("cor de destaque", () => {
     expect(buildCompanyView(publicCompanySchema.parse({ company_name: "X", accent_color: "#112233" }), null).accentColor).toBe("#112233");
     expect(buildCompanyView(publicCompanySchema.parse({ company_name: "X", accent_color: "azul" }), null).accentColor).toBeNull();
     expect(buildCompanyView(null, null).accentColor).toBeNull();
+  });
+});
+
+describe("links seguros", () => {
+  it("aceita so http(s)", () => {
+    expect(safeHttpUrl("https://facebook.com/x")).toBe("https://facebook.com/x");
+    expect(safeHttpUrl(" http://x.com ")).toBe("http://x.com");
+    for (const bad of ["javascript:alert(1)", "JaVaScRiPt:alert(1)", "data:text/html,x", "//evil.com", "ftp://x", "facebook.com/x", ""]) expect(safeHttpUrl(bad)).toBe("");
+  });
+
+  it("a visao da empresa descarta link perigoso vindo da configuracao", () => {
+    const v = buildCompanyView(publicCompanySchema.parse({ company_name: "X", facebook: "javascript:alert(1)", website: "https://x.com.br" }), null);
+    expect(v.facebook).toBe("");
+    expect(v.website).toBe("https://x.com.br");
   });
 });
