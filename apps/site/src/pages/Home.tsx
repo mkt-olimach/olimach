@@ -60,7 +60,7 @@ export function Home() {
   const company = useCompany();
   const wa = useWhatsapp();
   const [params] = useSearchParams();
-  const [showAll, setShowAll] = useState(false);
+  const [showAll, setShowAll] = useState(true);
   const { courses, loading: loadingCourses } = useCatalog();
   const query = (params.get("q") ?? "").trim().toLowerCase();
 
@@ -290,13 +290,13 @@ export function Home() {
               id={course.slug}
               className="group scroll-mt-28 overflow-hidden rounded-[15px] border border-line bg-surface shadow-sm transition hover:-translate-y-1 hover:shadow-lg"
             >
-              <div className="relative h-40 overflow-hidden md:h-44">
+              <div className="relative aspect-[16/10] overflow-hidden bg-navy-900/5">
                 <img
                   src={course.coverUrl ?? courseImages[courses.indexOf(course) % courseImages.length]}
                   alt={course.coverUrl ? `Capa do treinamento ${course.name}` : `Ambiente de treinamento offshore, curso ${course.name}`}
                   loading="lazy"
                   decoding="async"
-                  className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
+                  className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.03]"
                 />
               </div>
               <div className="px-5 pt-5">
