@@ -95,6 +95,18 @@ export function whatsappDigits(value: string): string {
   return "";
 }
 
+/** Aceita so http(s): evita "javascript:" e similares em links vindos de configuracao. Vazio se invalido. */
+export function safeHttpUrl(value: string): string {
+  const v = value.trim();
+  if (!/^https?:\/\//i.test(v)) return "";
+  try {
+    const url = new URL(v);
+    return url.protocol === "http:" || url.protocol === "https:" ? v : "";
+  } catch {
+    return "";
+  }
+}
+
 function join(parts: Array<string | undefined>, separator: string): string {
   return parts.map((p) => (p ?? "").trim()).filter(Boolean).join(separator);
 }
@@ -115,16 +127,16 @@ export function buildCompanyView(row: PublicCompany | null, storageBase: string 
     whatsapp: c.whatsapp.trim(),
     whatsappDigits: whatsappDigits(c.whatsapp),
     email: c.email.trim(),
-    website: c.website.trim(),
+    website: safeHttpUrl(c.website),
     businessHours: c.business_hours.trim(),
     addressLine,
     cityState,
     postalCode: c.postal_code.trim(),
     fullAddress: join([addressLine, cityState, c.postal_code ? `CEP ${c.postal_code.trim()}` : ""], " - "),
-    facebook: c.facebook.trim(),
-    instagram: c.instagram.trim(),
-    linkedin: c.linkedin.trim(),
-    youtube: c.youtube.trim(),
+    facebook: safeHttpUrl(c.facebook),
+    instagram: safeHttpUrl(c.instagram),
+    linkedin: safeHttpUrl(c.linkedin),
+    youtube: safeHttpUrl(c.youtube),
     logoUrl: file(c.logo_path),
     faviconUrl: file(c.favicon_path),
     accentColor: c.accent_color ?? null,

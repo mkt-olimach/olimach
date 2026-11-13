@@ -376,6 +376,41 @@ describe("RLS", () => {
     await expect(as("authenticated", SECRETARIA, () => db.query("select * from public.create_exam_assignment($1, $2)", [emptyId, studentId]))).rejects.toThrow(/nao tem questoes/);
   });
 
+  it("endurecimento: anon sem privilegio de tabela, URLs so http(s), IP confiavel no rate limit", async () => {
+    // anon nao tem nem o privilegio de SELECT (antes herdado como padrao nas tabelas novas)
+    for (const table of ["certificate_signers", "company_settings", "gallery_images", "exams", "exam_assignments"]) {
+      await expect(as("anon", null, () => db.query(`select 1 from public.${table}`))).rejects.toThrow(/permission denied/);
+    }
+
+    // links da empresa: javascript:, data: e esquemas sem http(s) sao recusados pelo banco
+    for (const bad of ["javascript:alert(1)", "data:text/html,x", "ftp://x.com", "facebook.com/x"]) {
+      await expect(db.query("insert into public.company_settings (company_name, facebook) values ('Empresa', $1)", [bad])).rejects.toThrow(/company_settings_urls_http/);
+    }
+    await db.query("insert into public.company_settings (company_name, facebook, website) values ('Empresa', 'https://facebook.com/x', 'http://x.com.br') on conflict (singleton) do update set facebook = excluded.facebook");
+    await db.exec("delete from public.company_settings");
+
+    // IP do cliente: cf-connecting-ip > x-real-ip > ULTIMO item do X-Forwarded-For (o primeiro e forjavel)
+    const ipFor = async (headers: Record<string, string>) => {
+      await db.exec(`select set_config('request.headers', '${JSON.stringify(headers)}', false)`);
+      return (await q<{ ip: string }>("select public.request_client_ip() as ip"))[0].ip;
+    };
+    expect(await ipFor({ "x-forwarded-for": "9.9.9.9, 1.1.1.1, 2.2.2.2" })).toBe("2.2.2.2");
+    expect(await ipFor({ "x-forwarded-for": "9.9.9.9", "x-real-ip": "3.3.3.3" })).toBe("3.3.3.3");
+    expect(await ipFor({ "x-forwarded-for": "9.9.9.9", "cf-connecting-ip": "4.4.4.4", "x-real-ip": "3.3.3.3" })).toBe("4.4.4.4");
+    expect(await ipFor({})).toBe("unknown");
+
+    // forjar o primeiro item do X-Forwarded-For nao zera o rate limit da validacao publica
+    await db.exec("delete from public.validation_rate_limit");
+    const statuses: string[] = [];
+    for (let i = 0; i < 22; i++) {
+      await db.exec(`select set_config('request.headers', '${JSON.stringify({ "x-forwarded-for": `10.0.0.${i}, 8.8.8.8` })}', false)`);
+      const rows = await as("anon", null, () => q<{ status: string }>("select * from public.validate_certificate('ABCDEFGHJK')"));
+      if (rows[0]?.status === "rate_limited") statuses.push("limited");
+    }
+    expect(statuses.length).toBeGreaterThanOrEqual(1);
+    await db.exec("select set_config('request.headers', '', false); delete from public.validation_rate_limit");
+  });
+
   it("bucket de capas e publico; os demais continuam privados", async () => {
     const rows = await q<{ id: string; public: boolean }>("select id, public from storage.buckets order by id");
     expect(Object.fromEntries(rows.map((r) => [r.id, r.public]))).toEqual({ branding: true, certificates: false, "course-covers": true, gallery: true, signatures: false });
