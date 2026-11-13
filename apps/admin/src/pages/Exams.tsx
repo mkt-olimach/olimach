@@ -1,6 +1,6 @@
 import { maskCpf } from "@olimach/schemas";
 import { Badge, Button, cn } from "@olimach/ui";
-import { ClipboardList, Copy, Download, KeyRound, ListChecks, Pencil, Plus, Trash2 } from "lucide-react";
+import { ClipboardList, Copy, Download, Eye, KeyRound, ListChecks, Pencil, Plus, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { ConfirmDialog, Field, Modal, PageHeader, dbErrorMessage, inputClass } from "../components/ui";
@@ -369,11 +369,110 @@ function QuestionsDialog({ exam, canEdit, onChanged, onClose }: { exam: ExamRow;
   );
 }
 
+/** Previa da prova como o aluno a ve. Nada e gravado: a correcao e simulada aqui, so para o admin conferir. */
+function ExamPreviewDialog({ exam, onClose }: { exam: ExamRow; onClose: () => void }) {
+  const toast = useToast();
+  const [questions, setQuestions] = useState<QuestionRow[] | null>(null);
+  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [showKey, setShowKey] = useState(false);
+  const [result, setResult] = useState<{ correct: number; total: number; score: number; passed: boolean } | null>(null);
+  const [remaining, setRemaining] = useState<number | null>(exam.time_limit_minutes ? exam.time_limit_minutes * 60 : null);
+
+  useEffect(() => {
+    if (!supabase) return;
+    void supabase
+      .from("exam_questions")
+      .select("id, position, text, exam_options(id, position, text, is_correct)")
+      .eq("exam_id", exam.id)
+      .order("position")
+      .then(({ data, error }) => {
+        if (error) toast.error("Não foi possível carregar as questões.");
+        setQuestions(((data ?? []) as unknown as QuestionRow[]).map((q) => ({ ...q, exam_options: [...q.exam_options].sort((a, b) => a.position - b.position) })));
+      });
+  }, [exam.id, toast]);
+
+  useEffect(() => {
+    if (remaining === null || result) return;
+    const timer = setInterval(() => setRemaining((r) => (r === null ? r : Math.max(0, r - 1))), 1000);
+    return () => clearInterval(timer);
+  }, [remaining === null, result]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function submit() {
+    if (!questions) return;
+    const correct = questions.filter((q) => q.exam_options.find((o) => o.id === answers[q.id])?.is_correct).length;
+    const score = questions.length ? Math.round((correct / questions.length) * 100) : 0;
+    setResult({ correct, total: questions.length, score, passed: score >= exam.passing_score });
+  }
+
+  const fmt = (sec: number) => `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")}`;
+  const answered = Object.keys(answers).length;
+
+  return (
+    <Modal title={`Prévia: ${exam.title}`} description="É assim que o aluno vê a prova. Nada é salvo e o resultado é apenas uma simulação." onClose={onClose} wide>
+      {questions === null ? (
+        <p className="text-sm text-muted">Carregando...</p>
+      ) : questions.length === 0 ? (
+        <p className="py-6 text-center text-sm text-muted">Esta prova ainda não tem questões.</p>
+      ) : result ? (
+        <div className="py-6 text-center">
+          <h3 className="text-2xl text-navy-900">{result.passed ? "Aprovado!" : "Não foi dessa vez"}</h3>
+          <p className="mt-3 text-4xl font-extrabold text-navy-900">{result.score}%</p>
+          <p className="mt-2 text-sm text-muted">
+            {result.correct} de {result.total} questões corretas. Nota mínima: {exam.passing_score}%.
+          </p>
+          <p className="mt-4 text-xs text-muted">Simulação: nenhuma tentativa foi registrada.</p>
+          <Button className="mt-5" onClick={() => { setResult(null); setAnswers({}); setRemaining(exam.time_limit_minutes ? exam.time_limit_minutes * 60 : null); }}>
+            Refazer prévia
+          </Button>
+        </div>
+      ) : (
+        <div>
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line bg-canvas px-4 py-3">
+            <p className="text-xs text-muted">
+              Aluno exemplo · {answered}/{questions.length} respondidas · nota mínima {exam.passing_score}%
+            </p>
+            <div className="flex items-center gap-3">
+              {remaining !== null && <span className="rounded-full bg-surface px-3 py-1 text-sm font-extrabold tabular-nums text-navy-900">{fmt(remaining)}</span>}
+              <label className="flex items-center gap-1.5 text-xs text-muted">
+                <input type="checkbox" checked={showKey} onChange={(e) => setShowKey(e.target.checked)} /> Mostrar gabarito
+              </label>
+            </div>
+          </div>
+          {exam.instructions && <p className="mb-4 whitespace-pre-line rounded-2xl bg-canvas p-4 text-sm text-muted">{exam.instructions}</p>}
+          <ol className="space-y-4">
+            {questions.map((q, index) => (
+              <li key={q.id}>
+                <fieldset className="rounded-2xl border border-line bg-surface p-4">
+                  <legend className="px-1 text-sm font-bold text-navy-900">
+                    {index + 1}. {q.text}
+                  </legend>
+                  <div className="mt-2 space-y-2">
+                    {q.exam_options.map((o) => (
+                      <label key={o.id} className={cn("flex cursor-pointer items-start gap-3 rounded-xl border px-3.5 py-3 text-sm", answers[q.id] === o.id ? "border-navy-900 bg-canvas" : "border-line hover:bg-canvas", showKey && o.is_correct && "border-success bg-success/10")}>
+                        <input type="radio" name={`prev-${q.id}`} checked={answers[q.id] === o.id} onChange={() => setAnswers((a) => ({ ...a, [q.id]: o.id }))} className="mt-0.5 h-4 w-4 shrink-0 accent-navy-900" />
+                        <span>{o.text}</span>
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
+              </li>
+            ))}
+          </ol>
+          <div className="mt-5 flex justify-end">
+            <Button onClick={submit}>Enviar prova (simulação)</Button>
+          </div>
+        </div>
+      )}
+    </Modal>
+  );
+}
+
 function ExamsTab({ canEdit }: { canEdit: boolean }) {
   const toast = useToast();
   const [rows, setRows] = useState<ExamRow[] | null>(null);
   const [editing, setEditing] = useState<ExamRow | "new" | null>(null);
   const [questionsOf, setQuestionsOf] = useState<ExamRow | null>(null);
+  const [previewOf, setPreviewOf] = useState<ExamRow | null>(null);
   const [removing, setRemoving] = useState<ExamRow | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -444,6 +543,9 @@ function ExamsTab({ canEdit }: { canEdit: boolean }) {
                     <Badge tone={e.active ? "success" : "neutral"}>{e.active ? "Ativa" : "Inativa"}</Badge>
                   </td>
                   <td className="whitespace-nowrap px-2.5 py-3 text-right">
+                    <button type="button" onClick={() => setPreviewOf(e)} className="mr-1 inline-flex items-center gap-1 rounded px-2 py-1 text-[11px] font-semibold text-navy-900 hover:bg-canvas">
+                      <Eye size={14} aria-hidden /> Visualizar
+                    </button>
                     <button type="button" onClick={() => setQuestionsOf(e)} className="mr-1 inline-flex items-center gap-1 rounded px-2 py-1 text-[11px] font-semibold text-navy-900 hover:bg-canvas">
                       <ListChecks size={14} aria-hidden /> Questões
                     </button>
@@ -474,6 +576,7 @@ function ExamsTab({ canEdit }: { canEdit: boolean }) {
           onClose={() => setEditing(null)}
         />
       )}
+      {previewOf && <ExamPreviewDialog exam={previewOf} onClose={() => setPreviewOf(null)} />}
       {questionsOf && <QuestionsDialog exam={questionsOf} canEdit={canEdit} onChanged={() => void load()} onClose={() => setQuestionsOf(null)} />}
       {removing && <ConfirmDialog title="Excluir prova?" message={`A prova "${removing.title}" e todas as suas questões serão apagadas.`} confirmLabel="Excluir" busy={busy} onConfirm={() => void remove()} onClose={() => !busy && setRemoving(null)} />}
     </section>
