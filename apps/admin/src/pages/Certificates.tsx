@@ -1,11 +1,13 @@
 import { maskCpf, revokeCertificateSchema } from "@olimach/schemas";
 import { Button, StatusBadge, cn } from "@olimach/ui";
-import { ArrowDownToLine, Ban, FilePlus, Search } from "lucide-react";
+import { ArrowDownToLine, Ban, Check, FilePlus, Search, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Field, Modal, PageHeader, Pager, dbErrorMessage, inputClass } from "../components/ui";
 import { isAdminRole, useAuth } from "../lib/auth";
+import { notifyRequestsChanged, requestStatusLabel, timeAgo, useCertificateRequests } from "../lib/certificate-requests";
+import type { CertificateRequest } from "../lib/certificate-requests";
 import { formatDate, initials, openCertificatePdf, useDashboardData } from "../lib/certificates";
 import type { CertificateRow } from "../lib/certificates";
 import { formatPeriod } from "../lib/classes";
@@ -20,9 +22,10 @@ interface Eligible {
   student: { full_name: string; cpf: string } | null;
   class: { start_date: string; end_date: string; course: { name: string; category: string } | null } | null;
   certificates: Array<{ status: "valid" | "revoked" }>;
+  certificate_requests: Array<{ status: string }>;
 }
 
-function IssueDialog({ presetEnrollment, onIssued, onClose }: { presetEnrollment: string | null; onIssued: () => void; onClose: () => void }) {
+function IssueDialog({ presetEnrollment, isAdmin, onIssued, onClose }: { presetEnrollment: string | null; isAdmin: boolean; onIssued: () => void; onClose: () => void }) {
   const toast = useToast();
   const [eligible, setEligible] = useState<Eligible[] | null>(null);
   const [enrollmentId, setEnrollmentId] = useState(presetEnrollment ?? "");
@@ -34,7 +37,7 @@ function IssueDialog({ presetEnrollment, onIssued, onClose }: { presetEnrollment
     if (!supabase) return;
     void supabase
       .from("enrollments")
-      .select("id, student:students(full_name, cpf), class:classes(start_date, end_date, course:courses(name, category)), certificates(status)")
+      .select("id, student:students(full_name, cpf), class:classes(start_date, end_date, course:courses(name, category)), certificates(status), certificate_requests(status)")
       .eq("attendance_ok", true)
       .eq("approved", true)
       .limit(500)
@@ -44,7 +47,9 @@ function IssueDialog({ presetEnrollment, onIssued, onClose }: { presetEnrollment
           setError("Não foi possível carregar as matrículas aptas.");
           return;
         }
-        const rows = (data as unknown as Eligible[]).filter((e) => e.class?.course?.category !== "parceria" && !e.certificates.some((c) => c.status === "valid"));
+        const rows = (data as unknown as Eligible[]).filter(
+          (e) => e.class?.course?.category !== "parceria" && !e.certificates.some((c) => c.status === "valid") && !e.certificate_requests.some((r) => r.status === "pending"),
+        );
         setEligible(rows);
       });
   }, []);
@@ -65,6 +70,19 @@ function IssueDialog({ presetEnrollment, onIssued, onClose }: { presetEnrollment
     if (!enrollmentId) return setError("Escolha o aluno e a turma.");
     setError(null);
     setBusy(true);
+    if (!isAdmin) {
+      // secretaria: apenas solicita; o administrador aprova e emite
+      const { error: requestError } = await supabase.rpc("request_certificate", { p_enrollment_id: enrollmentId });
+      setBusy(false);
+      if (requestError) {
+        setError(requestError.message.includes("pendente") ? "Já existe uma solicitação pendente para esta matrícula." : dbErrorMessage(requestError, {}));
+        return;
+      }
+      toast.success("Solicitação enviada. Um administrador será notificado para aprovar.");
+      notifyRequestsChanged();
+      onIssued();
+      return;
+    }
     const { data, error: err } = await supabase.functions.invoke<{ code: string }>("issue-certificate", {
       body: { enrollment_id: enrollmentId },
     });
@@ -78,7 +96,7 @@ function IssueDialog({ presetEnrollment, onIssued, onClose }: { presetEnrollment
   }
 
   return (
-    <Modal wide title="Emitir certificado" description="Só aparecem matrículas com presença e aprovação, em treinamentos que emitem certificado." onClose={onClose}>
+    <Modal wide title={isAdmin ? "Emitir certificado" : "Solicitar certificado"} description="Só aparecem matrículas com presença e aprovação, em treinamentos que emitem certificado." onClose={onClose}>
       <form onSubmit={onSubmit} noValidate className="space-y-4">
         <label className="flex h-10 items-center gap-2 rounded-[9px] border border-line px-3 text-muted">
           <Search size={15} aria-hidden />
@@ -118,6 +136,9 @@ function IssueDialog({ presetEnrollment, onIssued, onClose }: { presetEnrollment
           )}
         </Field>
 
+        {!isAdmin && (
+          <p className="rounded-btn-admin bg-warning/15 p-3 text-xs text-ink">O certificado só é gerado depois que um <strong>administrador aprovar</strong> a solicitação. Você acompanha o andamento na aba Solicitações.</p>
+        )}
         <p className="rounded-btn-admin bg-canvas p-3 text-xs text-muted">
           O certificado sai com o campo de assinatura do aluno e as assinaturas padrão (engenheiro técnico, diretoria e técnico em segurança), configuradas em Configurações.
         </p>
@@ -134,7 +155,7 @@ function IssueDialog({ presetEnrollment, onIssued, onClose }: { presetEnrollment
             Cancelar
           </Button>
           <Button type="submit" disabled={busy}>
-            {busy ? "Gerando PDF..." : "Emitir certificado"}
+            {isAdmin ? (busy ? "Gerando PDF..." : "Emitir certificado") : busy ? "Enviando..." : "Enviar solicitação"}
           </Button>
         </div>
       </form>
@@ -188,6 +209,150 @@ export function RevokeDialog({ row, onDone, onClose }: { row: CertificateRow; on
   );
 }
 
+
+function RejectRequestDialog({ request, onDone, onClose }: { request: CertificateRequest; onDone: () => void; onClose: () => void }) {
+  const toast = useToast();
+  const [reason, setReason] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function onSubmit(event: FormEvent) {
+    event.preventDefault();
+    if (!supabase) return;
+    if (reason.trim().length < 3) return setError("Informe o motivo da recusa.");
+    setBusy(true);
+    const { error: err } = await supabase.rpc("reject_certificate_request", { p_id: request.id, p_reason: reason });
+    setBusy(false);
+    if (err) return setError(dbErrorMessage(err, {}));
+    toast.success("Solicitação recusada.");
+    onDone();
+  }
+
+  return (
+    <Modal title="Recusar solicitação" description={`${request.studentName} · ${request.courseName}`} onClose={onClose}>
+      <form onSubmit={onSubmit} noValidate className="space-y-4">
+        <Field label="Motivo da recusa" error={error ?? undefined} hint="A secretaria verá este motivo.">
+          {(p) => <textarea {...p} rows={4} maxLength={500} className={cn(inputClass, "resize-y")} value={reason} onChange={(e) => setReason(e.target.value)} />}
+        </Field>
+        <div className="flex justify-end gap-2">
+          <Button variant="secondary" onClick={onClose} disabled={busy}>
+            Cancelar
+          </Button>
+          <Button type="submit" disabled={busy} className="bg-danger hover:bg-danger/90">
+            {busy ? "Recusando..." : "Recusar"}
+          </Button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+function RequestsPanel({ isAdmin, userId, onIssued }: { isAdmin: boolean; userId: string | undefined; onIssued: () => void }) {
+  const toast = useToast();
+  const { rows, loading, reload } = useCertificateRequests();
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [rejecting, setRejecting] = useState<CertificateRequest | null>(null);
+
+  async function approve(request: CertificateRequest) {
+    if (!supabase) return;
+    setBusyId(request.id);
+    const { data, error: err } = await supabase.functions.invoke<{ code: string }>("issue-certificate", { body: { enrollment_id: request.enrollmentId } });
+    setBusyId(null);
+    if (err || !data) return void toast.error(await functionErrorMessage(err, "Não foi possível emitir o certificado. A solicitação continua pendente."));
+    toast.success(`Solicitação aprovada: certificado ${data.code} emitido.`);
+    notifyRequestsChanged();
+    onIssued();
+  }
+
+  async function cancel(request: CertificateRequest) {
+    if (!supabase) return;
+    setBusyId(request.id);
+    const { error: err } = await supabase.rpc("cancel_certificate_request", { p_id: request.id });
+    setBusyId(null);
+    if (err) return void toast.error(dbErrorMessage(err, {}));
+    toast.success("Solicitação cancelada.");
+    notifyRequestsChanged();
+  }
+
+  const tone: Record<CertificateRequest["status"], string> = {
+    pending: "bg-warning/15 text-[#8a6500]",
+    approved: "bg-success/10 text-success",
+    rejected: "bg-danger/10 text-danger",
+    cancelled: "bg-canvas text-muted",
+  };
+
+  return (
+    <div className="mt-4 overflow-x-auto">
+      <table className="w-full min-w-[720px] border-collapse text-left">
+        <thead>
+          <tr className="bg-canvas text-[10px] font-semibold text-[#253b57]">
+            <th className="rounded-l-md border-y border-line px-2.5 py-3">Aluno</th>
+            <th className="border-y border-line px-2.5 py-3">Treinamento</th>
+            <th className="border-y border-line px-2.5 py-3">Solicitado por</th>
+            <th className="border-y border-line px-2.5 py-3">Situação</th>
+            <th className="rounded-r-md border-y border-line px-2.5 py-3 text-right">Ações</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.id} className="border-b border-line text-[11px] text-[#4b5b70]">
+              <td className="px-2.5 py-3 font-medium text-ink">{r.studentName}</td>
+              <td className="px-2.5 py-3">
+                <span className="block max-w-[220px] truncate">{r.courseName}</span>
+              </td>
+              <td className="px-2.5 py-3">
+                {r.requesterName}
+                <span className="block text-[10px] text-[#7d90a7]">{timeAgo(r.createdAt)}</span>
+              </td>
+              <td className="px-2.5 py-3">
+                <span className={cn("inline-block rounded-full px-2.5 py-1 text-[10px] font-semibold", tone[r.status])}>{requestStatusLabel[r.status]}</span>
+                {r.status === "rejected" && r.rejectReason && <span className="mt-1 block max-w-[220px] text-[10px] text-muted">Motivo: {r.rejectReason}</span>}
+              </td>
+              <td className="px-2.5 py-3">
+                <div className="flex justify-end gap-1.5">
+                  {r.status === "pending" && isAdmin && (
+                    <>
+                      <Button onClick={() => void approve(r)} disabled={busyId === r.id}>
+                        <Check size={14} aria-hidden /> {busyId === r.id ? "Emitindo..." : "Aprovar e emitir"}
+                      </Button>
+                      <Button variant="secondary" onClick={() => setRejecting(r)} disabled={busyId === r.id}>
+                        <X size={14} aria-hidden /> Recusar
+                      </Button>
+                    </>
+                  )}
+                  {r.status === "pending" && !isAdmin && r.requestedBy === userId && (
+                    <Button variant="secondary" onClick={() => void cancel(r)} disabled={busyId === r.id}>
+                      Cancelar
+                    </Button>
+                  )}
+                </div>
+              </td>
+            </tr>
+          ))}
+          {rows.length === 0 && (
+            <tr>
+              <td colSpan={5} className="p-8 text-center text-xs text-muted">
+                {loading ? "Carregando solicitações..." : "Nenhuma solicitação de certificado."}
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+      {rejecting && (
+        <RejectRequestDialog
+          request={rejecting}
+          onClose={() => setRejecting(null)}
+          onDone={() => {
+            setRejecting(null);
+            notifyRequestsChanged();
+            void reload();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
 type Tab = "all" | "valid" | "expired" | "revoked";
 const tabs: Array<{ id: Tab; label: string }> = [
   { id: "all", label: "Todos" },
@@ -203,6 +368,15 @@ export function Certificates() {
   const { rows, loading, error, reload } = useDashboardData();
   const [params, setParams] = useSearchParams();
   const preset = params.get("emitir");
+  const view = params.get("aba") === "solicitacoes" ? "requests" : "list";
+  const { rows: requestRows } = useCertificateRequests();
+  const pendingRequests = requestRows.filter((r) => r.status === "pending").length;
+  const setView = (next: "list" | "requests") => {
+    const p = new URLSearchParams(params);
+    if (next === "requests") p.set("aba", "solicitacoes");
+    else p.delete("aba");
+    setParams(p, { replace: true });
+  };
   const [issuing, setIssuing] = useState(Boolean(preset));
   const [revoking, setRevoking] = useState<CertificateRow | null>(null);
   const [tab, setTab] = useState<Tab>("all");
@@ -250,12 +424,24 @@ export function Certificates() {
         description="Emissão, download e revogação. O PDF tem frente e verso, QR code e código de validação pública."
         action={
           <Button onClick={() => setIssuing(true)}>
-            <FilePlus size={16} aria-hidden /> Emitir certificado
+            <FilePlus size={16} aria-hidden /> {isAdmin ? "Emitir certificado" : "Solicitar certificado"}
           </Button>
         }
       />
 
       <div className="rounded-[15px] border border-line bg-surface p-4 shadow-sm md:p-5">
+        <div role="tablist" aria-label="Seção" className="mb-4 flex gap-1.5 border-b border-line pb-3">
+          {([["list", "Certificados"], ["requests", "Solicitações"]] as const).map(([id, label]) => (
+            <button key={id} type="button" role="tab" aria-selected={view === id} onClick={() => setView(id)} className={cn("whitespace-nowrap rounded-lg px-3.5 py-2 text-xs", view === id ? "bg-navy-900 font-bold text-white" : "text-muted hover:bg-canvas")}>
+              {label}
+              {id === "requests" && pendingRequests > 0 && <span className={cn("ml-1.5 rounded-full px-1.5 py-0.5 text-[10px] font-bold", view === id ? "bg-white/20" : "bg-danger text-white")}>{pendingRequests}</span>}
+            </button>
+          ))}
+        </div>
+        {view === "requests" ? (
+          <RequestsPanel isAdmin={isAdmin} userId={profile?.id} onIssued={reload} />
+        ) : (
+          <>
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div role="tablist" aria-label="Situação do certificado" className="flex gap-1.5 overflow-x-auto">
             {tabs.map(({ id, label }) => (
@@ -329,12 +515,15 @@ export function Certificates() {
           </table>
         </div>
         <Pager page={current} pages={pages} total={filtered.length} shown={visible.length} onChange={setPage} />
-        {!isAdmin && <p className="mt-3 text-[11px] text-muted">Somente administradores revogam certificados.</p>}
+        {!isAdmin && <p className="mt-3 text-[11px] text-muted">Somente administradores emitem e revogam certificados. Você pode solicitar a emissão.</p>}
+          </>
+        )}
       </div>
 
       {issuing && (
         <IssueDialog
           presetEnrollment={preset}
+          isAdmin={isAdmin}
           onClose={closeIssue}
           onIssued={() => {
             closeIssue();

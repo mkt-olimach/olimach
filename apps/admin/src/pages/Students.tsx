@@ -6,6 +6,8 @@ import type { FormEvent } from "react";
 import { ConfirmDialog, Field, Modal, PageHeader, Pager, dbErrorMessage, inputClass, useDebouncedValue } from "../components/ui";
 import { isAdminRole, useAuth } from "../lib/auth";
 import { initials } from "../lib/certificates";
+import { PhoneInput } from "../components/PhoneInput";
+import { isNationalValid, parsePhone } from "../lib/phone";
 import { supabase } from "../lib/supabase";
 import { useToast } from "../lib/toast";
 
@@ -52,6 +54,10 @@ function StudentForm({ student, onSaved, onClose }: { student: StudentRow | null
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
     if (!supabase) return;
+    const phone = parsePhone(values.phone);
+    if (values.phone.trim() !== "" && !isNationalValid(phone.country, phone.national)) {
+      return setErrors({ phone: phone.country.iso === "BR" ? "Informe o DDD e o número completo." : "Informe o número completo." });
+    }
     const parsed = studentInputSchema.safeParse({
       full_name: values.full_name,
       cpf: values.cpf,
@@ -110,7 +116,7 @@ function StudentForm({ student, onSaved, onClose }: { student: StudentRow | null
             {(p) => <input {...p} type="email" className={inputClass} autoComplete="off" value={values.email} onChange={(e) => set("email", e.target.value)} />}
           </Field>
           <Field label="Telefone" error={errors.phone}>
-            {(p) => <input {...p} type="tel" className={inputClass} autoComplete="off" value={values.phone} onChange={(e) => set("phone", e.target.value)} />}
+            {(p) => <PhoneInput {...p} value={values.phone} onChange={(v) => set("phone", v)} />}
           </Field>
         </div>
         <Field label="Empresa" error={errors.company} hint="Opcional.">

@@ -530,3 +530,72 @@ describe("catalogo de treinamentos (supabase/catalog/treinamentos.sql)", () => {
     expect(nr10.length === 0 || nr10[0]?.active === false).toBe(true);
   });
 });
+
+describe("aprovacao de certificados (secretaria solicita, admin emite)", () => {
+  let enrollment: string;
+  let notEligible: string;
+
+  beforeAll(async () => {
+    const [{ id: course }] = await q<{ id: string }>("select id from public.courses where category <> 'parceria' limit 1");
+    const [{ id: cls }] = await q<{ id: string }>(
+      "insert into public.classes (course_id, start_date, end_date, location) values ($1, '2026-02-02', '2026-02-06', 'Macaé') returning id",
+      [course],
+    );
+    const mk = async (cpf: string, name: string, ok: boolean) => {
+      const [{ id: st }] = await q<{ id: string }>("insert into public.students (full_name, cpf) values ($2, $1) returning id", [cpf, name]);
+      const [{ id }] = await q<{ id: string }>(
+        "insert into public.enrollments (class_id, student_id, attendance_ok, approved) values ($1, $2, $3, $3) returning id",
+        [cls, st, ok],
+      );
+      return id;
+    };
+    enrollment = await mk("55566677788", "Aluno Aprovacao", true);
+    notEligible = await mk("44455566677", "Aluno Sem Aprovacao", false);
+  });
+
+  it("secretaria nao insere certificado direto: so solicita", async () => {
+    await as("authenticated", SECRETARIA, async () => {
+      await expect(
+        db.query("insert into public.certificates (enrollment_id, pdf_path, pdf_sha256) values ($1, 'x.pdf', repeat('a', 64))", [enrollment]),
+      ).rejects.toThrow(/row-level security/);
+      await expect(q("select public.request_certificate($1)", [notEligible])).rejects.toThrow(/presenca/);
+      const [{ request_certificate: id }] = await q<{ request_certificate: string }>("select public.request_certificate($1)", [enrollment]);
+      expect(id).toBeTruthy();
+      await expect(q("select public.request_certificate($1)", [enrollment])).rejects.toThrow(/pendente/);
+      // a secretaria nao decide nem emite
+      await expect(q("select public.reject_certificate_request($1, 'nao')", [id])).rejects.toThrow(/administrador/);
+      await expect(q("select public.complete_certificate_request($1)", [id])).rejects.toThrow(/administrador/);
+    });
+  });
+
+  it("admin nao precisa solicitar e recusa com motivo", async () => {
+    await as("authenticated", ADMIN, async () => {
+      await expect(q("select public.request_certificate($1)", [enrollment])).rejects.toThrow(/diretamente/);
+      const [{ id }] = await q<{ id: string }>("select id from public.certificate_requests where status = 'pending'");
+      await expect(q("select public.reject_certificate_request($1, 'x')", [id])).rejects.toThrow(/motivo/);
+      await q("select public.reject_certificate_request($1, 'Dados do aluno incorretos')", [id]);
+    });
+    const [row] = await q<{ status: string; reject_reason: string }>("select status, reject_reason from public.certificate_requests where enrollment_id = $1", [enrollment]);
+    expect(row).toMatchObject({ status: "rejected", reject_reason: "Dados do aluno incorretos" });
+  });
+
+  it("emissao pelo admin aprova a solicitacao pendente; ninguem escreve direto na tabela", async () => {
+    await as("authenticated", SECRETARIA, async () => {
+      await q("select public.request_certificate($1)", [enrollment]);
+      await expect(db.query("update public.certificate_requests set status = 'approved'")).rejects.toThrow(/permission denied/);
+    });
+    await as("authenticated", ADMIN, async () => {
+      const [{ id: certId }] = await q<{ id: string }>(
+        "insert into public.certificates (enrollment_id, pdf_path, pdf_sha256) values ($1, 'ap.pdf', repeat('b', 64)) returning id",
+        [enrollment],
+      );
+      await q("select public.complete_certificate_request($1)", [certId]);
+    });
+    const rows = await q<{ status: string }>("select status from public.certificate_requests where enrollment_id = $1 order by created_at", [enrollment]);
+    expect(rows.map((r) => r.status)).toEqual(["rejected", "approved"]);
+    // matricula com certificado valido nao aceita nova solicitacao
+    await as("authenticated", SECRETARIA, async () => {
+      await expect(q("select public.request_certificate($1)", [enrollment])).rejects.toThrow(/certificado valido/);
+    });
+  });
+});
