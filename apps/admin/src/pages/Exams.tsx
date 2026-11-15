@@ -1,6 +1,6 @@
-import { maskCpf } from "@olimach/schemas";
+import { maskCpf, whatsappDigits } from "@olimach/schemas";
 import { Badge, Button, cn } from "@olimach/ui";
-import { ClipboardList, Copy, Download, Eye, KeyRound, ListChecks, Pencil, Plus, Trash2 } from "lucide-react";
+import { ClipboardList, Copy, Download, Eye, KeyRound, ListChecks, MessageCircle, Pencil, Plus, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { ConfirmDialog, Field, Modal, PageHeader, dbErrorMessage, inputClass } from "../components/ui";
@@ -591,10 +591,18 @@ function ExamsTab({ canEdit }: { canEdit: boolean }) {
 
 /* -------------------------------------------------------------- Aplicações */
 
-function CredentialsDialog({ studentName, token, password, onClose }: { studentName: string; token: string; password: string; onClose: () => void }) {
+function CredentialsDialog({ studentName, studentPhone, token, password, onClose }: { studentName: string; studentPhone: string | null; token: string; password: string; onClose: () => void }) {
   const toast = useToast();
   const link = SITE_URL ? `${SITE_URL}/prova/${token}` : `/prova/${token}`;
   const message = `Olá, ${studentName.split(" ")[0]}! Seu acesso à prova online:\nLink: ${link}\nUse o seu CPF e a senha: ${password}`;
+
+  const phone = whatsappDigits(studentPhone ?? "");
+
+  // abre o WhatsApp com a mensagem pronta para o numero do aluno (o envio e feito por quem aplica)
+  function openWhatsapp() {
+    if (!phone) return void toast.error("O aluno não tem telefone válido cadastrado. Use Copiar mensagem.");
+    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, "_blank", "noopener,noreferrer");
+  }
 
   async function copy(value: string, label: string) {
     try {
@@ -631,19 +639,25 @@ function CredentialsDialog({ studentName, token, password, onClose }: { studentN
         </div>
       </dl>
       <div className="mt-5 flex flex-wrap justify-between gap-2">
-        <Button variant="secondary" onClick={() => void copy(message, "Mensagem")}>
-          <Copy size={14} aria-hidden /> Copiar mensagem pronta (WhatsApp)
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button onClick={openWhatsapp} disabled={!phone}>
+            <MessageCircle size={14} aria-hidden /> Enviar pelo WhatsApp
+          </Button>
+          <Button variant="secondary" onClick={() => void copy(message, "Mensagem")}>
+            <Copy size={14} aria-hidden /> Copiar mensagem
+          </Button>
+        </div>
+        {!phone && <p className="w-full text-xs text-muted">Aluno sem telefone válido cadastrado: copie a mensagem e envie manualmente.</p>}
         <Button onClick={onClose}>Concluir</Button>
       </div>
     </Modal>
   );
 }
 
-function AssignDialog({ onCreated, onClose }: { onCreated: (result: { studentName: string; token: string; password: string }) => void; onClose: () => void }) {
+function AssignDialog({ onCreated, onClose }: { onCreated: (result: { studentName: string; studentPhone: string | null; token: string; password: string }) => void; onClose: () => void }) {
   const toast = useToast();
   const [exams, setExams] = useState<ExamRow[]>([]);
-  const [students, setStudents] = useState<Array<{ id: string; full_name: string; cpf: string }>>([]);
+  const [students, setStudents] = useState<Array<{ id: string; full_name: string; cpf: string; phone: string | null }>>([]);
   const [filter, setFilter] = useState("");
   const [examId, setExamId] = useState("");
   const [studentId, setStudentId] = useState("");
@@ -662,10 +676,10 @@ function AssignDialog({ onCreated, onClose }: { onCreated: (result: { studentNam
       .then(({ data }) => setExams(((data ?? []) as unknown as ExamRow[]).filter((e) => questionCount(e) > 0)));
     void supabase
       .from("students")
-      .select("id, full_name, cpf")
+      .select("id, full_name, cpf, phone")
       .order("full_name")
       .limit(1000)
-      .then(({ data }) => setStudents((data ?? []) as Array<{ id: string; full_name: string; cpf: string }>));
+      .then(({ data }) => setStudents((data ?? []) as Array<{ id: string; full_name: string; cpf: string; phone: string | null }>));
   }, []);
 
   const shown = useMemo(() => {
@@ -695,7 +709,8 @@ function AssignDialog({ onCreated, onClose }: { onCreated: (result: { studentNam
       toast.error(rpcError?.message?.includes("questoes") ? "A prova ainda não tem questões." : dbErrorMessage(rpcError ?? {}, {}));
       return;
     }
-    onCreated({ studentName: students.find((s) => s.id === studentId)?.full_name ?? "", token: row.token, password: row.password });
+    const chosen = students.find((s) => s.id === studentId);
+    onCreated({ studentName: chosen?.full_name ?? "", studentPhone: chosen?.phone ?? null, token: row.token, password: row.password });
   }
 
   return (
@@ -776,7 +791,7 @@ function AssignmentsTab({ canAssign, canDelete }: { canAssign: boolean; canDelet
   const [rows, setRows] = useState<OverviewRow[] | null>(null);
   const [query, setQuery] = useState("");
   const [assigning, setAssigning] = useState(false);
-  const [credentials, setCredentials] = useState<{ studentName: string; token: string; password: string } | null>(null);
+  const [credentials, setCredentials] = useState<{ studentName: string; studentPhone: string | null; token: string; password: string } | null>(null);
   const [revoking, setRevoking] = useState<OverviewRow | null>(null);
   const [deleting, setDeleting] = useState<OverviewRow | null>(null);
   const [busy, setBusy] = useState(false);
