@@ -9,7 +9,8 @@ import { useAuth } from "../lib/auth";
 /** Destino do link de recuperacao enviado por e-mail. O supabase-js troca o token do link por uma sessao. */
 export function ResetPassword() {
   const { company } = useCompany();
-  const { loading, session, configured, updatePassword, signOut } = useAuth();
+  const { loading, session, profile, configured, updatePassword, signOut } = useAuth();
+  const firstAccess = Boolean(profile?.must_change_password);
   const navigate = useNavigate();
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
@@ -35,6 +36,11 @@ export function ResetPassword() {
       setError(message);
       return;
     }
+    // Primeiro acesso com senha provisoria: ja esta autenticado, segue para o painel.
+    if (firstAccess) {
+      navigate("/", { replace: true });
+      return;
+    }
     // Encerra a sessao do link e exige entrar com a nova senha.
     await signOut();
     navigate("/login", { replace: true, state: { notice: "Senha atualizada. Entre com a nova senha." } });
@@ -46,7 +52,8 @@ export function ResetPassword() {
     <div className="flex min-h-screen items-center justify-center p-4">
       <Card className="w-full max-w-sm p-6">
         <BrandLogo src={company.logoUrl ?? undefined} name={company.name} className="h-28 w-auto" />
-        <h1 className="mt-6 text-2xl">Nova senha</h1>
+        <h1 className="mt-6 text-2xl">{firstAccess ? "Defina sua senha" : "Nova senha"}</h1>
+        {firstAccess && <p className="mt-2 text-sm text-muted">Este é o seu primeiro acesso. Troque a senha provisória por uma senha só sua para continuar.</p>}
 
         {loading ? (
           <p className="mt-4 text-sm text-muted">Validando o link...</p>

@@ -84,6 +84,8 @@ export function AdminLayout() {
   if (!session) return <Navigate to="/login" replace />;
   // Sessao vinda do link de recuperacao: so serve para definir a nova senha.
   if (recovery) return <Navigate to="/redefinir-senha" replace />;
+  // Conta criada com senha provisoria: troca obrigatoria no primeiro acesso.
+  if (profile?.must_change_password) return <Navigate to="/redefinir-senha" replace />;
 
   const displayName = profile?.name ?? session.user.email ?? "Usuário";
 

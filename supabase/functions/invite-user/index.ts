@@ -26,9 +26,8 @@ Deno.serve(async (request) => {
   if (!authorization) return fail(401, "unauthorized", "Sessão ausente. Entre novamente.");
 
   const adminUrl = (Deno.env.get("ADMIN_URL") ?? "").replace(/\/$/, "");
-  if (!adminUrl) return fail(422, "not_configured", "Configure o segredo ADMIN_URL na função antes de convidar.");
 
-  let body: { email?: string; name?: string; role?: string };
+  let body: { email?: string; name?: string; role?: string; password?: string };
   try {
     body = await request.json();
   } catch {
@@ -40,6 +39,12 @@ Deno.serve(async (request) => {
   if (!EMAIL.test(email) || email.length > 254) return fail(400, "invalid_email", "Informe um e-mail válido.");
   if (name.length < 2 || name.length > 120) return fail(400, "invalid_name", "Informe o nome (2 a 120 caracteres).");
   if (!ROLES.includes(role)) return fail(400, "invalid_role", "Papel inválido.");
+  // Senha provisoria (opcional): mesma regra do painel (10 a 72 caracteres, com letra e numero).
+  const password = typeof body.password === "string" && body.password.length > 0 ? body.password : null;
+  if (password && (password.length < 10 || password.length > 72 || !/[A-Za-z]/.test(password) || !/[0-9]/.test(password))) {
+    return fail(400, "invalid_password", "A senha deve ter de 10 a 72 caracteres, com letra e número.");
+  }
+  if (!password && !adminUrl) return fail(422, "not_configured", "Configure o segredo ADMIN_URL na função antes de convidar.");
 
   const url = Deno.env.get("SUPABASE_URL")!;
   const asCaller = createClient(url, Deno.env.get("SUPABASE_ANON_KEY")!, {
@@ -52,22 +57,24 @@ Deno.serve(async (request) => {
   if (isAdmin !== true) return fail(403, "forbidden", "Somente administradores convidam usuários.");
 
   const service = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, { auth: { persistSession: false } });
-  const { data: invited, error: inviteError } = await service.auth.admin.inviteUserByEmail(email, {
-    redirectTo: `${adminUrl}/redefinir-senha`,
-    data: { name },
-  });
+  // Com senha: cria a conta ja confirmada, sem e-mail; o usuario troca a senha no primeiro acesso.
+  // Sem senha: convite por e-mail para o proprio usuario definir a senha.
+  const { data: invited, error: inviteError } = password
+    ? await service.auth.admin.createUser({ email, password, email_confirm: true, user_metadata: { name } })
+    : await service.auth.admin.inviteUserByEmail(email, { redirectTo: `${adminUrl}/redefinir-senha`, data: { name } });
   if (inviteError || !invited.user) {
     const taken = /already|registered|exists/i.test(inviteError?.message ?? "");
-    return fail(taken ? 409 : 502, taken ? "already_registered" : "invite_failed", taken ? "Este e-mail já tem conta." : "Não foi possível enviar o convite. Verifique o SMTP do Supabase.");
+    const failed = password ? "Não foi possível criar a conta." : "Não foi possível enviar o convite. Verifique o SMTP do Supabase.";
+    return fail(taken ? 409 : 502, taken ? "already_registered" : "invite_failed", taken ? "Este e-mail já tem conta." : failed);
   }
 
   // Perfil gravado com o JWT do chamador: a RLS exige admin e o audit_log registra quem convidou.
-  const { error: profileError } = await asCaller.from("profiles").insert({ id: invited.user.id, name, role });
+  const { error: profileError } = await asCaller.from("profiles").insert({ id: invited.user.id, name, role, must_change_password: Boolean(password) });
   if (profileError) {
     // Convite enviado sem perfil: remove a conta para nao deixar usuario sem acesso e sem registro.
     await service.auth.admin.deleteUser(invited.user.id);
     return fail(500, "profile_failed", "Não foi possível criar o perfil. Nada foi enviado.");
   }
 
-  return respond(200, { id: invited.user.id, email, role });
+  return respond(200, { id: invited.user.id, email, role, mode: password ? "password" : "email" });
 });

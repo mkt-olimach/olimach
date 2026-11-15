@@ -599,3 +599,15 @@ describe("aprovacao de certificados (secretaria solicita, admin emite)", () => {
     });
   });
 });
+
+describe("senha provisoria no convite", () => {
+  it("cada usuario limpa so o proprio marcador de troca de senha", async () => {
+    await db.exec(`update public.profiles set must_change_password = true where id in ('${ADMIN}', '${SECRETARIA}')`);
+    await as("authenticated", SECRETARIA, async () => {
+      await q("select public.clear_must_change_password()");
+    });
+    const rows = await q<{ id: string; must_change_password: boolean }>(`select id, must_change_password from public.profiles where id in ('${ADMIN}', '${SECRETARIA}')`);
+    expect(Object.fromEntries(rows.map((r) => [r.id, r.must_change_password]))).toEqual({ [ADMIN]: true, [SECRETARIA]: false });
+    await db.exec(`update public.profiles set must_change_password = false where id = '${ADMIN}'`);
+  });
+});
