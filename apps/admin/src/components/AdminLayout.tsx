@@ -1,6 +1,5 @@
 import { BrandLogo, cn } from "@olimach/ui";
 import {
-  Bell,
   BookOpen,
   CalendarDays,
   ClipboardCheck,
@@ -24,6 +23,7 @@ import { NavLink, Navigate, Outlet, useLocation, useNavigate, useSearchParams } 
 import { isSuperAdminRole, roleLabel, useAuth } from "../lib/auth";
 import { initials } from "../lib/certificates";
 import { useCompany } from "../lib/company";
+import { NotificationBell } from "./NotificationBell";
 
 const nav: Array<{ to: string; label: string; icon: LucideIcon; end?: boolean }> = [
   { to: "/", label: "Início", icon: Home, end: true },
@@ -159,9 +159,7 @@ export function AdminLayout() {
             </button>
             <GlobalSearch />
             <div className="flex items-center gap-3">
-              <span className="relative hidden text-[#172944] md:block" title="Notificações">
-                <Bell size={20} aria-hidden />
-              </span>
+              <NotificationBell />
               <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#092248] text-xs font-semibold text-white" aria-hidden>
                 {initials(displayName)}
               </span>

@@ -80,6 +80,13 @@ Deno.serve(async (request) => {
     auth: { persistSession: false },
   });
 
+  // Emissao so por administrador. A secretaria solicita (RPC request_certificate) e o admin aprova aqui.
+  // A policy de insert em certificates tambem exige is_admin(): esta checagem so devolve um erro claro.
+  const { data: isAdmin } = await client.rpc("is_admin");
+  if (isAdmin !== true) {
+    return fail(403, "approval_required", "A emissão depende da aprovação de um administrador. Envie uma solicitação.");
+  }
+
   // Dados da empresa: modulo White Label primeiro; segredos da funcao (SITE_URL, COMPANY_*) como reserva.
   const { data: company } = await client
     .from("company_settings")
@@ -204,6 +211,10 @@ Deno.serve(async (request) => {
     console.error("certificate insert failed", insertError);
     return fail(insertError?.code === "23505" ? 409 : 422, "insert_failed", insertError?.message ?? "Não foi possível registrar o certificado.");
   }
+
+  // Se havia solicitacao pendente desta matricula, ela passa a aprovada (falha aqui nao desfaz a emissao).
+  const { error: completeError } = await client.rpc("complete_certificate_request", { p_certificate_id: certificate.id });
+  if (completeError) console.error("complete_certificate_request failed", completeError);
 
   return respond(200, { id: certificate.id, code: certificate.code, pdf_path: pdfPath });
 });

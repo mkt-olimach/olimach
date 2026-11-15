@@ -1,4 +1,4 @@
-import { maskCpf, whatsappDigits } from "@olimach/schemas";
+import { maskCpf } from "@olimach/schemas";
 import { Badge, Button, cn } from "@olimach/ui";
 import { ClipboardList, Copy, Download, Eye, KeyRound, ListChecks, MessageCircle, Pencil, Plus, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -6,6 +6,7 @@ import type { FormEvent } from "react";
 import { ConfirmDialog, Field, Modal, PageHeader, dbErrorMessage, inputClass } from "../components/ui";
 import { isAdminRole, useAuth } from "../lib/auth";
 import { buildCsv } from "../lib/csv";
+import { phoneToWhatsapp } from "../lib/phone";
 import { SITE_URL } from "../lib/site-url";
 import { supabase } from "../lib/supabase";
 import { useToast } from "../lib/toast";
@@ -596,7 +597,7 @@ function CredentialsDialog({ studentName, studentPhone, token, password, onClose
   const link = SITE_URL ? `${SITE_URL}/prova/${token}` : `/prova/${token}`;
   const message = `Olá, ${studentName.split(" ")[0]}! Seu acesso à prova online:\nLink: ${link}\nUse o seu CPF e a senha: ${password}`;
 
-  const phone = whatsappDigits(studentPhone ?? "");
+  const phone = phoneToWhatsapp(studentPhone);
 
   // abre o WhatsApp com a mensagem pronta para o numero do aluno (o envio e feito por quem aplica)
   function openWhatsapp() {

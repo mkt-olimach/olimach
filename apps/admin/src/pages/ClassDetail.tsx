@@ -296,7 +296,7 @@ export function ClassDetail() {
                         <span className="text-muted">Não se aplica</span>
                       ) : e.attendance_ok && e.approved ? (
                         <Link to={`/certificados?emitir=${e.id}`} className="inline-flex items-center gap-1.5 rounded-lg bg-navy-900 px-2.5 py-1.5 font-semibold text-white hover:bg-navy-700">
-                          Emitir certificado
+                          {isAdmin ? "Emitir certificado" : "Solicitar certificado"}
                         </Link>
                       ) : (
                         <span className="text-muted">Aguardando</span>
