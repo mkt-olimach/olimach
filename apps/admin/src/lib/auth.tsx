@@ -7,6 +7,8 @@ export interface Profile {
   id: string;
   name: string;
   role: "super_admin" | "admin" | "secretaria";
+  /** Conta criada com senha provisoria: o painel pede a troca no primeiro acesso. */
+  must_change_password?: boolean;
 }
 
 /** super_admin tambem e administrador: herda tudo que o admin faz. */
@@ -58,7 +60,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     supabase
       .from("profiles")
-      .select("id, name, role")
+      .select("id, name, role, must_change_password")
       .eq("id", session.user.id)
       .maybeSingle()
       .then(({ data }) => setProfile((data as Profile | null) ?? null));
@@ -82,7 +84,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       updatePassword: async (password) => {
         if (!supabase) return "Ambiente sem conexão com o banco configurada.";
         const { error } = await supabase.auth.updateUser({ password });
-        if (!error) setRecovery(false);
+        if (!error) {
+          setRecovery(false);
+          // primeiro acesso com senha provisoria: libera o painel
+          const { error: clearError } = await supabase.rpc("clear_must_change_password");
+          if (!clearError) setProfile((p) => (p ? { ...p, must_change_password: false } : p));
+        }
         return error ? "Não foi possível atualizar a senha. Peça um novo link e tente de novo." : null;
       },
       signIn: async (email, password) => {
