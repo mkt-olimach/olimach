@@ -25,10 +25,22 @@ interface Eligible {
   certificate_requests: Array<{ status: string }>;
 }
 
+const todayIso = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+
+/** Campo de data de emissao: ate hoje e nao antes do fim da turma. Compartilhado pela emissao e pela aprovacao. */
+function IssueDateField({ value, min, onChange }: { value: string; min?: string; onChange: (v: string) => void }) {
+  return (
+    <Field label="Data de emissão" hint="Padrão: hoje. Para certificados de treinamentos já realizados, informe a data passada (não pode ser anterior ao fim da turma nem futura).">
+      {(p) => <input {...p} type="date" className={inputClass} value={value} min={min} max={todayIso()} onChange={(e) => onChange(e.target.value)} />}
+    </Field>
+  );
+}
+
 function IssueDialog({ presetEnrollment, isAdmin, onIssued, onClose }: { presetEnrollment: string | null; isAdmin: boolean; onIssued: () => void; onClose: () => void }) {
   const toast = useToast();
   const [eligible, setEligible] = useState<Eligible[] | null>(null);
   const [enrollmentId, setEnrollmentId] = useState(presetEnrollment ?? "");
+  const [issuedOn, setIssuedOn] = useState(todayIso());
   const [query, setQuery] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -83,8 +95,13 @@ function IssueDialog({ presetEnrollment, isAdmin, onIssued, onClose }: { presetE
       onIssued();
       return;
     }
+    const chosen = (eligible ?? []).find((e) => e.id === enrollmentId);
+    if (!issuedOn || issuedOn > todayIso() || (chosen?.class && issuedOn < chosen.class.end_date)) {
+      setBusy(false);
+      return setError("Data de emissão inválida: use uma data entre o fim da turma e hoje.");
+    }
     const { data, error: err } = await supabase.functions.invoke<{ code: string }>("issue-certificate", {
-      body: { enrollment_id: enrollmentId },
+      body: { enrollment_id: enrollmentId, issued_on: issuedOn },
     });
     setBusy(false);
     if (err || !data) {
@@ -136,6 +153,7 @@ function IssueDialog({ presetEnrollment, isAdmin, onIssued, onClose }: { presetE
           )}
         </Field>
 
+        {isAdmin && <IssueDateField value={issuedOn} min={(eligible ?? []).find((e) => e.id === enrollmentId)?.class?.end_date} onChange={setIssuedOn} />}
         {!isAdmin && (
           <p className="rounded-btn-admin bg-warning/15 p-3 text-xs text-ink">O certificado só é gerado depois que um <strong>administrador aprovar</strong> a solicitação. Você acompanha o andamento na aba Solicitações.</p>
         )}
@@ -247,22 +265,54 @@ function RejectRequestDialog({ request, onDone, onClose }: { request: Certificat
   );
 }
 
+function ApproveRequestDialog({ request, onDone, onClose }: { request: CertificateRequest; onDone: () => void; onClose: () => void }) {
+  const toast = useToast();
+  const [issuedOn, setIssuedOn] = useState(todayIso());
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function onSubmit(event: FormEvent) {
+    event.preventDefault();
+    if (!supabase) return;
+    if (!issuedOn || issuedOn > todayIso()) return setError("A data de emissão não pode ser futura.");
+    setError(null);
+    setBusy(true);
+    const { data, error: err } = await supabase.functions.invoke<{ code: string }>("issue-certificate", { body: { enrollment_id: request.enrollmentId, issued_on: issuedOn } });
+    setBusy(false);
+    if (err || !data) return setError(await functionErrorMessage(err, "Não foi possível emitir o certificado. A solicitação continua pendente."));
+    toast.success(`Solicitação aprovada: certificado ${data.code} emitido.`);
+    onDone();
+  }
+
+  return (
+    <Modal title="Aprovar e emitir" description={`${request.studentName} · ${request.courseName}`} onClose={onClose}>
+      <form onSubmit={onSubmit} noValidate className="space-y-4">
+        <IssueDateField value={issuedOn} onChange={setIssuedOn} />
+        {error && (
+          <p role="alert" className="rounded-btn-admin bg-danger/10 p-3 text-sm text-danger">
+            {error}
+          </p>
+        )}
+        <p className="text-xs text-muted">O PDF é gerado e guardado de forma definitiva, com a data escolhida.</p>
+        <div className="flex justify-end gap-2">
+          <Button variant="secondary" onClick={onClose} disabled={busy}>
+            Cancelar
+          </Button>
+          <Button type="submit" disabled={busy}>
+            {busy ? "Gerando PDF..." : "Aprovar e emitir"}
+          </Button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
 function RequestsPanel({ isAdmin, userId, onIssued }: { isAdmin: boolean; userId: string | undefined; onIssued: () => void }) {
   const toast = useToast();
   const { rows, loading, reload } = useCertificateRequests();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [rejecting, setRejecting] = useState<CertificateRequest | null>(null);
-
-  async function approve(request: CertificateRequest) {
-    if (!supabase) return;
-    setBusyId(request.id);
-    const { data, error: err } = await supabase.functions.invoke<{ code: string }>("issue-certificate", { body: { enrollment_id: request.enrollmentId } });
-    setBusyId(null);
-    if (err || !data) return void toast.error(await functionErrorMessage(err, "Não foi possível emitir o certificado. A solicitação continua pendente."));
-    toast.success(`Solicitação aprovada: certificado ${data.code} emitido.`);
-    notifyRequestsChanged();
-    onIssued();
-  }
+  const [approving, setApproving] = useState<CertificateRequest | null>(null);
 
   async function cancel(request: CertificateRequest) {
     if (!supabase) return;
@@ -312,8 +362,8 @@ function RequestsPanel({ isAdmin, userId, onIssued }: { isAdmin: boolean; userId
                 <div className="flex justify-end gap-1.5">
                   {r.status === "pending" && isAdmin && (
                     <>
-                      <Button onClick={() => void approve(r)} disabled={busyId === r.id}>
-                        <Check size={14} aria-hidden /> {busyId === r.id ? "Emitindo..." : "Aprovar e emitir"}
+                      <Button onClick={() => setApproving(r)} disabled={busyId === r.id}>
+                        <Check size={14} aria-hidden /> Aprovar e emitir
                       </Button>
                       <Button variant="secondary" onClick={() => setRejecting(r)} disabled={busyId === r.id}>
                         <X size={14} aria-hidden /> Recusar
@@ -338,6 +388,17 @@ function RequestsPanel({ isAdmin, userId, onIssued }: { isAdmin: boolean; userId
           )}
         </tbody>
       </table>
+      {approving && (
+        <ApproveRequestDialog
+          request={approving}
+          onClose={() => setApproving(null)}
+          onDone={() => {
+            setApproving(null);
+            notifyRequestsChanged();
+            onIssued();
+          }}
+        />
+      )}
       {rejecting && (
         <RejectRequestDialog
           request={rejecting}

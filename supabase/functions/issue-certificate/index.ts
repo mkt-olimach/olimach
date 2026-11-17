@@ -65,7 +65,7 @@ Deno.serve(async (request) => {
   const authorization = request.headers.get("Authorization");
   if (!authorization) return fail(401, "unauthorized", "Sessão ausente. Entre novamente.");
 
-  let body: { enrollment_id?: string };
+  let body: { enrollment_id?: string; issued_on?: string };
   try {
     body = await request.json();
   } catch {
@@ -158,7 +158,18 @@ Deno.serve(async (request) => {
   const { data: code, error: codeError } = await client.rpc("generate_certificate_code");
   if (codeError || typeof code !== "string") return fail(500, "code_failed", "Não foi possível gerar o código do certificado.");
 
-  const issuedAt = new Date();
+  // Data de emissao: hoje por padrao; o administrador pode informar uma data passada (YYYY-MM-DD).
+  // Nunca futura e nunca antes do fim da turma. Meio-dia UTC mantem o dia estavel em qualquer fuso.
+  const today = new Date().toISOString().slice(0, 10);
+  let issuedAt = new Date();
+  if (body.issued_on !== undefined && body.issued_on !== null && body.issued_on !== "") {
+    const day = String(body.issued_on);
+    const valid = /^\d{4}-\d{2}-\d{2}$/.test(day) && !Number.isNaN(Date.parse(`${day}T12:00:00Z`)) && new Date(`${day}T12:00:00Z`).toISOString().slice(0, 10) === day;
+    if (!valid) return fail(400, "invalid_date", "Data de emissão inválida.");
+    if (day > today) return fail(422, "future_date", "A data de emissão não pode ser futura.");
+    if (day < klass.end_date) return fail(422, "before_class_end", "A data de emissão não pode ser anterior ao fim da turma.");
+    if (day !== today) issuedAt = new Date(`${day}T12:00:00Z`);
+  }
   const expiresAt = course.validity_months ? addMonths(issuedAt, course.validity_months) : null;
 
   let pdf: Uint8Array;
