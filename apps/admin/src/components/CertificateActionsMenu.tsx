@@ -1,7 +1,7 @@
 import { Ban, Copy, Download, ExternalLink, MoreVertical } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { openCertificatePdf } from "../lib/certificates";
+import { certificateFileName, openCertificatePdf } from "../lib/certificates";
 import type { CertificateRow } from "../lib/certificates";
 import { useToast } from "../lib/toast";
 
@@ -63,7 +63,7 @@ export function CertificateActionsMenu({ row, siteUrl, canRevoke, onRevoke }: Pr
   async function download() {
     setPos(null);
     if (!row.pdfPath) return;
-    const message = await openCertificatePdf(row.pdfPath);
+    const message = await openCertificatePdf(row.pdfPath, certificateFileName(row));
     if (message) toast.error(message);
   }
 

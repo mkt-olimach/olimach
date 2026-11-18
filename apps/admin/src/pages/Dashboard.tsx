@@ -20,7 +20,7 @@ import { CertificateActionsMenu } from "../components/CertificateActionsMenu";
 import { isAdminRole, useAuth } from "../lib/auth";
 import { useCompany } from "../lib/company";
 import { SITE_URL } from "../lib/site-url";
-import { formatDate, initials, openCertificatePdf, useDashboardData } from "../lib/certificates";
+import { formatDate, initials, certificateFileName, openCertificatePdf, useDashboardData } from "../lib/certificates";
 import { RevokeDialog } from "./Certificates";
 import type { CertificateRow } from "../lib/certificates";
 
@@ -156,7 +156,7 @@ function CertificatePreview({ row }: { row: CertificateRow }) {
           type="button"
           disabled={!row.hasPdf}
           onClick={() => {
-            if (row.pdfPath) void openCertificatePdf(row.pdfPath);
+            if (row.pdfPath) void openCertificatePdf(row.pdfPath, certificateFileName(row));
           }}
           title={row.hasPdf ? "Abrir o PDF do certificado" : "PDF ainda não gerado"}
           className="inline-flex min-w-[100px] flex-1 items-center justify-center gap-2 rounded-[10px] border border-line bg-canvas px-3 py-3 text-xs font-semibold text-navy-900 hover:bg-line/40 disabled:opacity-60"

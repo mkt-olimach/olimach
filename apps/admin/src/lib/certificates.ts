@@ -14,6 +14,7 @@ export interface CertificateRow {
   studentName: string;
   studentCpf: string;
   courseName: string;
+  courseSlug: string;
   workloadHours: number | null;
 }
 
@@ -33,7 +34,7 @@ interface RawCertificate {
   revoked_reason: string | null;
   enrollment: {
     student: { full_name: string; cpf: string } | null;
-    class: { course: { name: string; workload_hours: number | null } | null } | null;
+    class: { course: { name: string; slug: string | null; workload_hours: number | null } | null } | null;
   } | null;
 }
 
@@ -64,7 +65,7 @@ export function useDashboardData() {
         client
           .from("certificates")
           .select(
-            "id, code, issued_at, expires_at, status, pdf_path, revoked_reason, enrollment:enrollments(student:students(full_name, cpf), class:classes(course:courses(name, workload_hours)))",
+            "id, code, issued_at, expires_at, status, pdf_path, revoked_reason, enrollment:enrollments(student:students(full_name, cpf), class:classes(course:courses(name, slug, workload_hours)))",
           )
           .order("issued_at", { ascending: false })
           .limit(LOAD_LIMIT),
@@ -91,6 +92,7 @@ export function useDashboardData() {
             studentName: r.enrollment?.student?.full_name ?? "-",
             studentCpf: r.enrollment?.student?.cpf ?? "",
             courseName: r.enrollment?.class?.course?.name ?? "-",
+            courseSlug: r.enrollment?.class?.course?.slug ?? "",
             workloadHours: r.enrollment?.class?.course?.workload_hours ?? null,
           })),
         );
@@ -125,11 +127,37 @@ export function initials(name: string): string {
   return `${first.charAt(0)}${last.charAt(0)}`.toUpperCase();
 }
 
-/** Abre o PDF em nova aba por URL assinada de curta duracao (o bucket e privado). */
-export async function openCertificatePdf(path: string): Promise<string | null> {
+/** Nome padrao do arquivo exportado: "Nome do aluno - [slug].pdf". */
+export function certificateFileName(row: Pick<CertificateRow, "studentName" | "courseSlug" | "code">): string {
+  const clean = (v: string) => v.replace(/[\\/:*?"<>|\u0000-\u001f]/g, "").replace(/\s+/g, " ").trim();
+  const name = clean(row.studentName) || "Certificado";
+  const id = clean(row.courseSlug) || clean(row.code);
+  return `${name} - [${id}].pdf`;
+}
+
+/** Baixa o PDF com o nome padrao, por URL assinada de curta duracao (o bucket e privado). */
+export async function openCertificatePdf(path: string, fileName?: string): Promise<string | null> {
   if (!supabase) return "Ambiente sem conexão com o banco configurada.";
   const { data, error } = await supabase.storage.from("certificates").createSignedUrl(path, 45);
   if (error || !data) return "Não foi possível abrir o PDF. Tente novamente.";
+  if (fileName) {
+    try {
+      const res = await fetch(data.signedUrl);
+      if (!res.ok) throw new Error(String(res.status));
+      const blob = await res.blob();
+      const url = URL.createObjectURL(new Blob([blob], { type: "application/pdf" }));
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10_000);
+      return null;
+    } catch {
+      // cai para a abertura em nova aba
+    }
+  }
   window.open(data.signedUrl, "_blank", "noopener,noreferrer");
   return null;
 }
