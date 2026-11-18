@@ -102,6 +102,55 @@ export function wrapText(text: string, font: PDFFont, size: number, maxWidth: nu
   return lines;
 }
 
+/** Linha de paragrafo: `last` marca a ultima linha (alinhada a esquerda; as demais sao justificadas). */
+export interface TextLine {
+  text: string;
+  last: boolean;
+}
+
+/** Como wrapText, mas marca a ultima linha de cada paragrafo (linhas vazias separam paragrafos). */
+export function wrapParagraphs(text: string, font: PDFFont, size: number, maxWidth: number): TextLine[] {
+  const out: TextLine[] = [];
+  for (const paragraph of toWinAnsi(text).split(/\r?\n/)) {
+    const lines = wrapText(paragraph, font, size, maxWidth);
+    lines.forEach((line, i) => out.push({ text: line, last: i === lines.length - 1 }));
+  }
+  return out;
+}
+
+/** Reagrupa linhas ja quebradas em paragrafos (para requebrar com outra largura ou corpo). */
+function joinParagraphs(lines: TextLine[]): string {
+  const paragraphs: string[] = [];
+  let current: string[] = [];
+  for (const line of lines) {
+    if (line.text) current.push(line.text);
+    if (line.last) {
+      paragraphs.push(current.join(" "));
+      current = [];
+    }
+  }
+  if (current.length) paragraphs.push(current.join(" "));
+  return paragraphs.join("\n");
+}
+
+/** Desenha a linha justificada (espaco extra distribuido entre as palavras), exceto a ultima do paragrafo. */
+function drawJustified(page: PDFPage, line: TextLine, x: number, y: number, width: number, font: PDFFont, size: number, color = INK) {
+  const words = line.text.split(" ").filter(Boolean);
+  if (words.length === 0) return;
+  const natural = font.widthOfTextAtSize(line.text, size);
+  if (line.last || words.length === 1 || natural >= width) {
+    page.drawText(line.text, { x, y, size, font, color });
+    return;
+  }
+  const wordsWidth = words.reduce((sum, w) => sum + font.widthOfTextAtSize(w, size), 0);
+  const gap = (width - wordsWidth) / (words.length - 1);
+  let cx = x;
+  for (const word of words) {
+    page.drawText(word, { x: cx, y, size, font, color });
+    cx += font.widthOfTextAtSize(word, size) + gap;
+  }
+}
+
 function drawCentered(page: PDFPage, text: string, y: number, font: PDFFont, size: number, color = INK, spacing = 0) {
   const clean = toWinAnsi(text);
   const width = font.widthOfTextAtSize(clean, size) + spacing * Math.max(0, clean.length - 1);
@@ -227,7 +276,8 @@ export async function buildCertificatePdf(data: CertificateData): Promise<Uint8A
   // Conteudo programatico; o que nao couber continua na segunda pagina.
   const bodySize = 8.5;
   const lineHeight = 11;
-  const lines = wrapText(data.syllabus.trim() || "Conteúdo programático não informado.", regular, bodySize, textWidth);
+  const syllabus = data.syllabus.trim() || "Conteúdo programático não informado.";
+  const lines = wrapParagraphs(syllabus, regular, bodySize, textWidth);
   const refText = data.technicalReference.trim() ? `Referência Técnica: ${data.technicalReference.trim()}` : "";
   const refLines = refText ? wrapText(refText, regular, 8, textWidth) : [];
   // bloco de carga horaria, referencia tecnica e datas (altura) + margem acima da grade de assinaturas
@@ -237,8 +287,8 @@ export async function buildCertificatePdf(data: CertificateData): Promise<Uint8A
   y -= 14;
   let index = 0;
   while (index < lines.length && y > frontFloor) {
-    const line = lines[index] ?? "";
-    if (line) front.drawText(line, { x: left, y, size: bodySize, font: regular, color: INK });
+    const line = lines[index];
+    if (line?.text) drawJustified(front, line, left, y, textWidth, regular, bodySize);
     y -= lineHeight;
     index++;
   }
@@ -303,23 +353,28 @@ export async function buildCertificatePdf(data: CertificateData): Promise<Uint8A
   drawCentered(front, toWinAnsi(`Valide em ${data.validationUrl}`), 32, regular, 7, GRAY);
 
   // ------------------------------------------------- segunda pagina (so se sobrar conteudo)
+  // O restante e requebrado no corpo e na largura da continuacao (antes ia na largura da frente e vazava a borda).
+  const nextSize = 10;
+  const nextLineHeight = 14;
+  const rest = index < lines.length ? wrapParagraphs(joinParagraphs(lines.slice(index)), regular, nextSize, textWidth) : [];
+  let restIndex = 0;
   let pageNumber = 1;
-  while (index < lines.length) {
+  while (restIndex < rest.length) {
     const next = doc.addPage(PAGE);
     pageNumber++;
     drawWatermark(next);
     drawFrame(next);
-    next.drawText("CONTEÚDO PROGRAMÁTICO (continuação)", { x: MARGIN + 24, y: PAGE[1] - 66, size: 14, font: bold, color: NAVY });
-    next.drawText(toWinAnsi(wrapText(data.courseName, regular, 10, textWidth)[0] ?? ""), { x: MARGIN + 24, y: PAGE[1] - 84, size: 10, font: regular, color: GRAY });
-    next.drawLine({ start: { x: MARGIN + 24, y: PAGE[1] - 94 }, end: { x: PAGE[0] - MARGIN - 24, y: PAGE[1] - 94 }, thickness: 0.7, color: ORANGE });
+    next.drawText("CONTEÚDO PROGRAMÁTICO (continuação)", { x: left, y: PAGE[1] - 66, size: 14, font: bold, color: NAVY });
+    next.drawText(toWinAnsi(wrapText(data.courseName, regular, 10, textWidth)[0] ?? ""), { x: left, y: PAGE[1] - 84, size: 10, font: regular, color: GRAY });
+    next.drawLine({ start: { x: left, y: PAGE[1] - 94 }, end: { x: right, y: PAGE[1] - 94 }, thickness: 0.7, color: ORANGE });
     let ty = PAGE[1] - 116;
-    while (index < lines.length && ty > 70) {
-      const line = lines[index] ?? "";
-      if (line) next.drawText(line, { x: MARGIN + 24, y: ty, size: 10, font: regular, color: INK });
-      ty -= 14;
-      index++;
+    while (restIndex < rest.length && ty > 70) {
+      const line = rest[restIndex];
+      if (line?.text) drawJustified(next, line, left, ty, textWidth, regular, nextSize);
+      ty -= nextLineHeight;
+      restIndex++;
     }
-    next.drawText(toWinAnsi(`Certificado ${data.code}  |  página ${pageNumber}`), { x: MARGIN + 24, y: 34, size: 8, font: regular, color: GRAY });
+    next.drawText(toWinAnsi(`Certificado ${data.code}  |  página ${pageNumber}`), { x: left, y: 34, size: 8, font: regular, color: GRAY });
   }
 
   return doc.save();
