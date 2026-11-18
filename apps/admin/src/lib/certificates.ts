@@ -127,12 +127,12 @@ export function initials(name: string): string {
   return `${first.charAt(0)}${last.charAt(0)}`.toUpperCase();
 }
 
-/** Nome padrao do arquivo exportado: "Nome do aluno - [slug].pdf". */
+/** Nome padrao do arquivo exportado: "Olimach Treinamentos <slug> - Nome do aluno.pdf". */
 export function certificateFileName(row: Pick<CertificateRow, "studentName" | "courseSlug" | "code">): string {
   const clean = (v: string) => v.replace(/[\\/:*?"<>|\u0000-\u001f]/g, "").replace(/\s+/g, " ").trim();
   const name = clean(row.studentName) || "Certificado";
   const id = clean(row.courseSlug) || clean(row.code);
-  return `${name} - [${id}].pdf`;
+  return `Olimach Treinamentos ${id} - ${name}.pdf`;
 }
 
 /** Baixa o PDF com o nome padrao, por URL assinada de curta duracao (o bucket e privado). */
