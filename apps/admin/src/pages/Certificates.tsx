@@ -8,7 +8,7 @@ import { Field, Modal, PageHeader, Pager, dbErrorMessage, inputClass } from "../
 import { isAdminRole, useAuth } from "../lib/auth";
 import { notifyRequestsChanged, requestStatusLabel, timeAgo, useCertificateRequests } from "../lib/certificate-requests";
 import type { CertificateRequest } from "../lib/certificate-requests";
-import { formatDate, initials, openCertificatePdf, useDashboardData } from "../lib/certificates";
+import { formatDate, initials, certificateFileName, openCertificatePdf, useDashboardData } from "../lib/certificates";
 import type { CertificateRow } from "../lib/certificates";
 import { formatPeriod } from "../lib/classes";
 import { functionErrorMessage } from "../lib/functions";
@@ -474,7 +474,7 @@ export function Certificates() {
 
   async function download(row: CertificateRow) {
     if (!row.pdfPath) return;
-    const message = await openCertificatePdf(row.pdfPath);
+    const message = await openCertificatePdf(row.pdfPath, certificateFileName(row));
     if (message) toast.error(message);
   }
 
